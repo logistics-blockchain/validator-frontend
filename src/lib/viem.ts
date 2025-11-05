@@ -27,7 +27,7 @@ export const besuCloud: Chain = {
   name: 'Besu Cloud',
   nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
   rpcUrls: {
-    default: { http: ['http://130.61.62.103:8545'] },
+    default: { http: ['/api/rpc'] },
   },
   testnet: true,
 }
@@ -46,26 +46,28 @@ export const HARDHAT_ACCOUNTS = [
   { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', privateKey: '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' },
 ] as const
 
-// Besu cloud validator accounts (2 QBFT validators)
+// Besu cloud validator accounts (4 QBFT validators)
 export const BESU_ACCOUNTS = [
-  { address: '0xf176465f83bfa22f1057e4353b5a100a1c198507', privateKey: '0x39370a408c1179415a5ccd89c6c20bc8eaa33e5d0eb83d0f46fed040e5d2ae73' },  // Cloud Node 0
-  { address: '0xef832eca2439987697d43917f9d3d0dd1e9410b7', privateKey: '0x51d1695ea8d42d178db3d8c20d9e9d7251c573f4b96fc7a3f4fb2e2a4e541372' },  // Cloud Node 1
+  { address: '0x9940632656841559a5e1c3a9eb749b560a2af771', privateKey: '0x07c0675ec3681c76e1d7ed39923440a2ae8aa01099f6ce27af35fd0afe3ed5a3' },  // Node 0 (152.70.182.220)
+  { address: '0x67821f32b9b2521b7a7783f520488d5a31291706', privateKey: '0x95914f4d71d648e6ef3e04361bf2905879cc61c9c51fec371e98b767023611e4' },  // Node 1 (92.5.95.144)
+  { address: '0x5cec6a25862c772e28d1016e71933a92ac336b30', privateKey: '0x725ce25916492a2a44ed160c5c0c406c847e949d2f65049b39bfe15f3bc6f388' },  // Node 2 (152.70.188.128)
+  { address: '0x235c74be7644025d75bbc434d3618498b365d339', privateKey: '0xd1fda28b1ddb1cf8bfab4636a076cfe3507de102d3f30892f0b3abc05469618d' },  // Node 3 (130.61.22.253)
 ] as const
 
 // Auto-detect which chain we're connected to
 async function detectChain(): Promise<Chain> {
-  // Try cloud first
+  // Try cloud via proxy first
   try {
     const cloudClient = createPublicClient({
-      transport: http('http://130.61.62.103:8545', { timeout: 3000 }),
+      transport: http('/api/rpc', { timeout: 3000 }),
     })
     const chainId = await cloudClient.getChainId()
     if (chainId === 10001) {
-      console.log('🔗 Detected Besu Cloud chain (10001)')
+      console.log('🔗 Detected Besu Cloud chain (10001) via proxy')
       return besuCloud
     }
   } catch (e) {
-    console.log('☁️ Cloud network not available, trying local...')
+    console.log('☁️ Cloud network not available via proxy, trying local...')
   }
 
   // Try local

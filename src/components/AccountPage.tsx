@@ -37,6 +37,11 @@ export function AccountPage({
   const [activeTab, setActiveTab] = useState<TabType>('transactions')
   const [openNfts, setOpenNfts] = useState<Record<string, boolean>>({})
 
+  // Check if this address is a known contract in our store
+  const isKnownContract = contracts.some(
+    (c) => c.address.toLowerCase() === address.toLowerCase()
+  )
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
   }
@@ -190,7 +195,7 @@ export function AccountPage({
 
             {/* Action buttons */}
             <div className="pt-4 border-t flex gap-2">
-              {addressInfo.contractName && onViewContract && (
+              {isKnownContract && onViewContract && (
                 <Button
                   onClick={() => onViewContract(address)}
                   variant="outline"

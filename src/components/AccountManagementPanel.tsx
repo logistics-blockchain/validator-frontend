@@ -64,7 +64,7 @@ export function AccountManagementPanel() {
         <div>
           <div className="text-sm text-gray-600 mb-1">Address</div>
           <div className="flex items-center gap-2">
-            <code className="flex-1 p-2 bg-gray-100 rounded text-sm">
+            <code className="flex-1 p-2 bg-gray-100 rounded text-sm overflow-hidden text-ellipsis whitespace-nowrap">
               {selectedAccount.address}
             </code>
             <Button

@@ -163,16 +163,6 @@ export function ManufacturerProxyPanel({ onDeployProxy }: ManufacturerProxyPanel
               View My Orders
             </Button>
           </div>
-
-          {/* Quick Info */}
-          <div className="text-xs text-gray-500 pt-2 border-t">
-            <p className="font-medium mb-1">Quick Actions:</p>
-            <ul className="list-disc list-inside space-y-1">
-              <li>Create new orders</li>
-              <li>Update order states</li>
-              <li>View order history</li>
-            </ul>
-          </div>
         </div>
       </CardContent>
     </Card>

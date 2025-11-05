@@ -1,14 +1,14 @@
 {
-  "network": "besu-local",
+  "network": "besu-cloud",
   "chainId": 10001,
-  "deployer": "0x415Dd919Df8f7702ab2F95D7f07eF57D63E92B55",
+  "deployer": "0x9940632656841559a5e1c3A9Eb749b560A2af771",
   "pattern": "factory",
   "contracts": {
-    "ManufacturerRegistry": "0x98e4efc405e1e6ebf1d81f03976383b0b45a420c",
-    "LogisticsOrderImplementation": "0xb26246ac53991cf9205689824cb10a17d0186463",
-    "LogisticsOrderFactory": "0x7870421c9d96e4b07679e640f60a46162c70235f"
+    "ManufacturerRegistry": "0x1413f2ef36d6556265035bad9cbe12b722061b4e",
+    "LogisticsOrderImplementation": "0x8c9004f74cbd83e8dac9306160a1fefa073b533d",
+    "LogisticsOrderFactory": "0xbe3039c04874dff3af540fcd9ee2b940c42f81e4"
   },
-  "timestamp": "2025-10-29T13:52:13.611Z",
+  "timestamp": "2025-11-04T21:48:14.545Z",
   "notes": {
     "usage": "Manufacturers call createLogisticsOrder() on factory to get their own proxy",
     "sharedImplementation": "All manufacturer proxies use the same implementation contract",

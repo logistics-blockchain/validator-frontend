@@ -10,11 +10,58 @@ import type { Hash } from 'viem'
 export function useBlockHistory(count: number = 20) {
   const [blocks, setBlocks] = useState<BlockInfo[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastBlockNumber, setLastBlockNumber] = useState<bigint | null>(null)
   const currentBlock = useBlockchainStore((state) => state.currentBlock)
 
+  // Initial load only
   useEffect(() => {
     loadBlocks()
-  }, [currentBlock, count])
+  }, [count])
+
+  // Incremental update when new block arrives
+  useEffect(() => {
+    if (!currentBlock) return
+
+    const blockNum = currentBlock.number
+
+    // Skip if we already have this block
+    if (lastBlockNumber !== null && blockNum <= lastBlockNumber) {
+      return
+    }
+
+    // If this is first load or initial blocks not loaded yet
+    if (blocks.length === 0) {
+      loadBlocks()
+      return
+    }
+
+    // Add only the new block incrementally
+    addNewBlock(blockNum)
+  }, [currentBlock])
+
+  const addNewBlock = async (blockNumber: bigint) => {
+    try {
+      console.log('[BlockExplorer] Adding new block:', blockNumber)
+      const block = await publicClient.getBlock({ blockNumber })
+
+      const newBlock: BlockInfo = {
+        number: block.number!,
+        hash: block.hash!,
+        parentHash: block.parentHash,
+        timestamp: block.timestamp,
+        miner: block.miner!,
+        transactionCount: block.transactions.length,
+        size: block.size,
+        transactions: block.transactions as Hash[],
+      }
+
+      // Prepend new block and keep only 'count' most recent blocks
+      setBlocks((prev) => [newBlock, ...prev].slice(0, count))
+      setLastBlockNumber(blockNumber)
+    } catch (error) {
+      console.error('[BlockExplorer] Error adding new block:', error)
+    }
+  }
 
   const loadBlocks = async () => {
     setLoading(true)
@@ -39,7 +86,7 @@ export function useBlockHistory(count: number = 20) {
         blockNumbers.push(i)
       }
 
-      console.log('[BlockExplorer] Fetching blocks from', start, 'to', latestBlockNumber, '- total:', blockNumbers.length)
+      console.log('[BlockExplorer] Initial load: Fetching blocks from', start, 'to', latestBlockNumber, '- total:', blockNumbers.length)
 
       const blockPromises = blockNumbers.map(async (num) => {
         const block = await publicClient.getBlock({ blockNumber: num })
@@ -56,8 +103,9 @@ export function useBlockHistory(count: number = 20) {
       })
 
       const loadedBlocks = await Promise.all(blockPromises)
-      console.log('[BlockExplorer] Loaded', loadedBlocks.length, 'blocks')
+      console.log('[BlockExplorer] Initial load complete:', loadedBlocks.length, 'blocks')
       setBlocks(loadedBlocks)
+      setLastBlockNumber(latestBlockNumber)
     } catch (error) {
       console.error('[BlockExplorer] Error loading blocks:', error)
       setBlocks([])

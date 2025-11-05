@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
-import { publicClient, createWalletClientForAccount } from '@/lib/viem'
+import { publicClient, createWalletClientForAccount, getActiveAccounts } from '@/lib/viem'
 import { parseAbi, type Address, type Abi } from 'viem'
+import { formatAddress } from '@/lib/utils'
 
 const VALIDATOR_CONTRACT = '0x0000000000000000000000000000000000009999' as Address
 
@@ -17,6 +18,16 @@ interface AdminProposal {
   signatureCount: number
 }
 
+interface TransactionStatus {
+  type: 'add_validator' | 'remove_validator' | 'add_admin' | 'sign_proposal' | 'approve_validator'
+  status: 'pending' | 'success' | 'error'
+  hash?: string
+  blockNumber?: string
+  gasUsed?: string
+  error?: string
+  target?: Address
+}
+
 export function ValidatorManagement() {
   const [newValidatorAddress, setNewValidatorAddress] = useState('')
   const [removeValidatorAddress, setRemoveValidatorAddress] = useState('')
@@ -25,13 +36,14 @@ export function ValidatorManagement() {
   const [currentAdmins, setCurrentAdmins] = useState<Address[]>([])
   const [pendingApplications, setPendingApplications] = useState<Address[]>([])
   const [isAdmin, setIsAdmin] = useState(false)
-  const [adminCount, setAdminCount] = useState<number | null>(null) // null = not loaded yet
-  const [validatorCount, setValidatorCount] = useState<number | null>(null) // null = not loaded yet
+  const [adminCount, setAdminCount] = useState<number | null>(null)
+  const [validatorCount, setValidatorCount] = useState<number | null>(null)
   const [loading, setLoading] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState(0)
   const [contractAbi, setContractAbi] = useState<Abi | null>(null)
   const [abiLoadError, setAbiLoadError] = useState<string | null>(null)
   const [pendingAdminProposals, setPendingAdminProposals] = useState<AdminProposal[]>([])
+  const [txStatus, setTxStatus] = useState<TransactionStatus | null>(null)
 
   // Load contract ABI
   useEffect(() => {
@@ -70,9 +82,8 @@ export function ValidatorManagement() {
       }) as Address[]
       setCurrentValidators(validators)
       setValidatorCount(validators.length)
-      console.log('Loaded validators:', validators.length)
 
-      // Get pending applications (optional - might not exist on all contract versions)
+      // Get pending applications
       try {
         const pending = await publicClient.readContract({
           address: VALIDATOR_CONTRACT,
@@ -80,10 +91,8 @@ export function ValidatorManagement() {
           functionName: 'getPendingValidators',
         }) as Address[]
         setPendingApplications(pending)
-        console.log('Loaded pending applications:', pending.length)
       } catch (pendingError) {
-        console.log('getPendingValidators() not available on this contract')
-        setPendingApplications([]) // No pending applications feature
+        setPendingApplications([])
       }
 
       // Get admins
@@ -95,11 +104,10 @@ export function ValidatorManagement() {
         }) as Address[]
         setCurrentAdmins(admins)
         setAdminCount(admins.length)
-        console.log('Loaded admins:', admins.length)
       } catch (adminError) {
         console.error('Error loading admins:', adminError)
         setCurrentAdmins([])
-        setAdminCount(1) // Fallback for genesis-deployed contracts
+        setAdminCount(1)
       }
 
       // Check if current account is admin
@@ -120,16 +128,11 @@ export function ValidatorManagement() {
   }
 
   const loadAdminProposals = async () => {
-    if (!contractAbi) {
-      console.log('Cannot load admin proposals: ABI not loaded')
-      return
-    }
+    if (!contractAbi) return
 
-    console.log('Loading admin proposals...')
     try {
       const proposals: AdminProposal[] = []
 
-      // Try to load proposals 0-9 (since adminProposalCount reverts)
       for (let i = 0; i < 10; i++) {
         try {
           const proposal = await publicClient.readContract({
@@ -141,19 +144,13 @@ export function ValidatorManagement() {
 
           const [candidate, isAddition, executed, createdAt] = proposal
 
-          console.log(`Proposal #${i}: candidate=${candidate}, isAddition=${isAddition}, executed=${executed}`)
-
-          // Only include non-executed proposals
           if (!executed && candidate !== '0x0000000000000000000000000000000000000000') {
-            // Get signatures for this proposal
             const signatures = await publicClient.readContract({
               address: VALIDATOR_CONTRACT,
               abi: contractAbi,
               functionName: 'getAdminProposalSignatures',
               args: [BigInt(i)],
             }) as Address[]
-
-            console.log(`  -> Proposal #${i} is pending with ${signatures.length} signatures:`, signatures)
 
             proposals.push({
               id: i,
@@ -166,16 +163,11 @@ export function ValidatorManagement() {
             })
           }
         } catch (err) {
-          // Proposal doesn't exist or other error, skip it
-          if (i < 3) {
-            console.log(`Proposal #${i} does not exist or error:`, err)
-          }
           continue
         }
       }
 
       setPendingAdminProposals(proposals)
-      console.log(`✓ Loaded ${proposals.length} pending admin proposals`, proposals)
     } catch (error) {
       console.error('ERROR loading admin proposals:', error)
       setPendingAdminProposals([])
@@ -185,33 +177,48 @@ export function ValidatorManagement() {
   const handleAddValidator = async () => {
     if (!contractAbi) return
     if (!newValidatorAddress || !/^0x[a-fA-F0-9]{40}$/.test(newValidatorAddress)) {
-      alert('Please enter a valid Ethereum address')
+      setTxStatus({
+        type: 'add_validator',
+        status: 'error',
+        error: 'Please enter a valid Ethereum address',
+        target: newValidatorAddress as Address
+      })
       return
     }
 
     setLoading(true)
+    setTxStatus({ type: 'add_validator', status: 'pending', target: newValidatorAddress as Address })
+
     try {
       const walletClient = createWalletClientForAccount(selectedAccount)
-
-      // Use proposeApproval instead of addValidator
       const hash = await walletClient.writeContract({
         address: VALIDATOR_CONTRACT,
         abi: contractAbi,
         functionName: 'proposeApproval',
-        args: [newValidatorAddress as Address, ''],  // address, reason (empty string)
+        args: [newValidatorAddress as Address, ''],
       })
 
-      console.log('Transaction hash:', hash)
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
 
-      // Wait for transaction
-      await publicClient.waitForTransactionReceipt({ hash })
+      setTxStatus({
+        type: 'add_validator',
+        status: 'success',
+        hash,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        target: newValidatorAddress as Address
+      })
 
-      alert('Validator approval proposed successfully! (Single admin = instant approval)')
       setNewValidatorAddress('')
       loadContractState()
     } catch (error: any) {
       console.error('Error proposing validator approval:', error)
-      alert(`Error: ${error.message || 'Failed to propose validator approval'}`)
+      setTxStatus({
+        type: 'add_validator',
+        status: 'error',
+        error: error.message || 'Failed to propose validator approval',
+        target: newValidatorAddress as Address
+      })
     } finally {
       setLoading(false)
     }
@@ -220,36 +227,48 @@ export function ValidatorManagement() {
   const handleRemoveValidator = async () => {
     if (!contractAbi) return
     if (!removeValidatorAddress || !/^0x[a-fA-F0-9]{40}$/.test(removeValidatorAddress)) {
-      alert('Please enter a valid Ethereum address')
-      return
-    }
-
-    if (!confirm(`Are you sure you want to propose removing validator ${removeValidatorAddress}?`)) {
+      setTxStatus({
+        type: 'remove_validator',
+        status: 'error',
+        error: 'Please enter a valid Ethereum address',
+        target: removeValidatorAddress as Address
+      })
       return
     }
 
     setLoading(true)
+    setTxStatus({ type: 'remove_validator', status: 'pending', target: removeValidatorAddress as Address })
+
     try {
       const walletClient = createWalletClientForAccount(selectedAccount)
-
-      // Use proposeRemoval instead of removeValidator
       const hash = await walletClient.writeContract({
         address: VALIDATOR_CONTRACT,
         abi: contractAbi,
         functionName: 'proposeRemoval',
-        args: [removeValidatorAddress as Address, ''],  // address, reason (empty string)
+        args: [removeValidatorAddress as Address, ''],
       })
 
-      console.log('Transaction hash:', hash)
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
 
-      await publicClient.waitForTransactionReceipt({ hash })
+      setTxStatus({
+        type: 'remove_validator',
+        status: 'success',
+        hash,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        target: removeValidatorAddress as Address
+      })
 
-      alert('Validator removal proposed successfully! (Single admin = instant removal)')
       setRemoveValidatorAddress('')
       loadContractState()
     } catch (error: any) {
       console.error('Error proposing validator removal:', error)
-      alert(`Error: ${error.message || 'Failed to propose validator removal'}`)
+      setTxStatus({
+        type: 'remove_validator',
+        status: 'error',
+        error: error.message || 'Failed to propose validator removal',
+        target: removeValidatorAddress as Address
+      })
     } finally {
       setLoading(false)
     }
@@ -258,26 +277,37 @@ export function ValidatorManagement() {
   const handleApproveValidator = async (validator: Address) => {
     if (!contractAbi) return
     setLoading(true)
+    setTxStatus({ type: 'approve_validator', status: 'pending', target: validator })
+
     try {
       const walletClient = createWalletClientForAccount(selectedAccount)
-
-      // Use proposeApproval for pending applications
       const hash = await walletClient.writeContract({
         address: VALIDATOR_CONTRACT,
         abi: contractAbi,
         functionName: 'proposeApproval',
-        args: [validator, ''],  // address, reason (empty string)
+        args: [validator, ''],
       })
 
-      console.log('Transaction hash:', hash)
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
 
-      await publicClient.waitForTransactionReceipt({ hash })
+      setTxStatus({
+        type: 'approve_validator',
+        status: 'success',
+        hash,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        target: validator
+      })
 
-      alert('Validator approved successfully!')
       loadContractState()
     } catch (error: any) {
       console.error('Error approving validator:', error)
-      alert(`Error: ${error.message || 'Failed to approve validator'}`)
+      setTxStatus({
+        type: 'approve_validator',
+        status: 'error',
+        error: error.message || 'Failed to approve validator',
+        target: validator
+      })
     } finally {
       setLoading(false)
     }
@@ -286,43 +316,48 @@ export function ValidatorManagement() {
   const handleAddAdmin = async () => {
     if (!contractAbi) return
     if (!newAdminAddress || !/^0x[a-fA-F0-9]{40}$/.test(newAdminAddress)) {
-      alert('Please enter a valid Ethereum address')
+      setTxStatus({
+        type: 'add_admin',
+        status: 'error',
+        error: 'Please enter a valid Ethereum address',
+        target: newAdminAddress as Address
+      })
       return
     }
 
     setLoading(true)
+    setTxStatus({ type: 'add_admin', status: 'pending', target: newAdminAddress as Address })
+
     try {
       const walletClient = createWalletClientForAccount(selectedAccount)
-
-      // Check current admin count to provide appropriate feedback
-      const currentAdminCount = currentAdmins.length
-      const threshold = Math.floor(currentAdminCount / 2) + 1
-
-      // Use proposeAddAdmin to add a new admin
       const hash = await walletClient.writeContract({
         address: VALIDATOR_CONTRACT,
         abi: contractAbi,
         functionName: 'proposeAddAdmin',
-        args: [newAdminAddress as Address],  // only address parameter
+        args: [newAdminAddress as Address],
       })
 
-      console.log('Transaction hash:', hash)
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
 
-      // Wait for transaction
-      await publicClient.waitForTransactionReceipt({ hash })
-
-      // Context-aware success message
-      if (currentAdminCount === 1) {
-        alert('Admin added successfully! (Single admin = instant approval)')
-      } else {
-        alert(`Admin proposal created! Requires ${threshold - 1} more signature(s) to execute (${threshold}/${currentAdminCount} needed)`)
-      }
+      setTxStatus({
+        type: 'add_admin',
+        status: 'success',
+        hash,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        target: newAdminAddress as Address
+      })
 
       setNewAdminAddress('')
       loadContractState()
     } catch (error: any) {
       console.error('Error adding admin:', error)
-      alert(`Error: ${error.message || 'Failed to add admin'}`)
+      setTxStatus({
+        type: 'add_admin',
+        status: 'error',
+        error: error.message || 'Failed to add admin',
+        target: newAdminAddress as Address
+      })
     } finally {
       setLoading(false)
     }
@@ -331,14 +366,11 @@ export function ValidatorManagement() {
   const handleSignProposal = async (proposalId: number, candidateAddress: Address) => {
     if (!contractAbi) return
 
-    if (!confirm(`Sign proposal to add admin ${candidateAddress}?`)) {
-      return
-    }
-
     setLoading(true)
+    setTxStatus({ type: 'sign_proposal', status: 'pending', target: candidateAddress })
+
     try {
       const walletClient = createWalletClientForAccount(selectedAccount)
-
       const hash = await walletClient.writeContract({
         address: VALIDATOR_CONTRACT,
         abi: contractAbi,
@@ -346,15 +378,26 @@ export function ValidatorManagement() {
         args: [BigInt(proposalId)],
       })
 
-      console.log('Transaction hash:', hash)
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
 
-      await publicClient.waitForTransactionReceipt({ hash })
+      setTxStatus({
+        type: 'sign_proposal',
+        status: 'success',
+        hash,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        target: candidateAddress
+      })
 
-      alert('Proposal signed successfully! If threshold reached, admin has been added.')
       loadContractState()
     } catch (error: any) {
       console.error('Error signing proposal:', error)
-      alert(`Error: ${error.message || 'Failed to sign proposal'}`)
+      setTxStatus({
+        type: 'sign_proposal',
+        status: 'error',
+        error: error.message || 'Failed to sign proposal',
+        target: candidateAddress
+      })
     } finally {
       setLoading(false)
     }
@@ -385,6 +428,71 @@ export function ValidatorManagement() {
           </div>
         )}
 
+        {/* Contract Info - Moved to top */}
+        <div className="grid grid-cols-[150px_1fr] gap-y-3 text-sm">
+          <div className="text-gray-500">Contract:</div>
+          <div className="font-mono text-xs">{VALIDATOR_CONTRACT}</div>
+
+          <div className="text-gray-500">Quorum:</div>
+          <div className="font-medium">
+            {adminCount > 1
+              ? `${Math.floor(adminCount / 2) + 1}/${adminCount} admin signatures required`
+              : 'Single admin (instant approval)'}
+          </div>
+        </div>
+
+        {/* Transaction Status Display */}
+        {txStatus && (
+          <div className={`p-4 rounded-md border ${
+            txStatus.status === 'success' ? 'bg-green-50 border-green-200' :
+            txStatus.status === 'error' ? 'bg-red-50 border-red-200' :
+            'bg-blue-50 border-blue-200'
+          }`}>
+            <div className="flex items-center justify-between mb-2">
+              <div className={`text-sm font-semibold ${
+                txStatus.status === 'success' ? 'text-green-800' :
+                txStatus.status === 'error' ? 'text-red-800' :
+                'text-blue-800'
+              }`}>
+                {txStatus.type === 'add_validator' && 'Add Validator Proposal'}
+                {txStatus.type === 'remove_validator' && 'Remove Validator Proposal'}
+                {txStatus.type === 'add_admin' && 'Add Admin Proposal'}
+                {txStatus.type === 'sign_proposal' && 'Sign Admin Proposal'}
+                {txStatus.type === 'approve_validator' && 'Approve Validator'}
+              </div>
+              <Badge variant={
+                txStatus.status === 'success' ? 'success' :
+                txStatus.status === 'error' ? 'destructive' :
+                'default'
+              }>
+                {txStatus.status}
+              </Badge>
+            </div>
+
+            {txStatus.target && (
+              <div className="text-xs text-gray-600 mb-2">
+                Target: <span className="font-mono">{formatAddress(txStatus.target)}</span>
+              </div>
+            )}
+
+            {txStatus.status === 'success' && (
+              <div className="text-xs space-y-1 font-mono">
+                <div>Hash: {txStatus.hash}</div>
+                <div>Block: {txStatus.blockNumber}</div>
+                <div>Gas Used: {txStatus.gasUsed}</div>
+              </div>
+            )}
+
+            {txStatus.status === 'error' && (
+              <div className="text-xs text-red-700">{txStatus.error}</div>
+            )}
+
+            {txStatus.status === 'pending' && (
+              <div className="text-xs text-blue-700">Transaction pending...</div>
+            )}
+          </div>
+        )}
+
         {/* Account Selector */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -395,8 +503,11 @@ export function ValidatorManagement() {
             onChange={(e) => setSelectedAccount(Number(e.target.value))}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <option value={0}>Account #0 (Cloud Validator Node 0)</option>
-            <option value={1}>Account #1 (Cloud Validator Node 1)</option>
+            {getActiveAccounts().map((account, index) => (
+              <option key={account.address} value={index}>
+                Account #{index}: {formatAddress(account.address)}
+              </option>
+            ))}
           </select>
         </div>
 
@@ -416,7 +527,7 @@ export function ValidatorManagement() {
           </div>
         </div>
 
-        {/* Add New Admin (only shown to admins) */}
+        {/* Add New Admin */}
         {isAdmin && (
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Add New Admin</h3>
@@ -435,9 +546,6 @@ export function ValidatorManagement() {
                 {loading ? 'Adding...' : 'Add Admin'}
               </Button>
             </div>
-            <p className="text-xs text-gray-500 mt-1">
-              Adding a second admin will enable multi-signature approvals. Currently: instant approval.
-            </p>
           </div>
         )}
 
@@ -587,20 +695,10 @@ export function ValidatorManagement() {
         {!isAdmin && (
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
             <p className="text-sm text-blue-800">
-              ℹ️ You need admin privileges to add or remove validators. Current account is not an admin.
+              You need admin privileges to add or remove validators. Current account is not an admin.
             </p>
           </div>
         )}
-
-        {/* Contract Info */}
-        <div className="pt-4 border-t">
-          <div className="text-xs text-gray-500">
-            <div>Contract: <span className="font-mono">{VALIDATOR_CONTRACT}</span></div>
-            <div className="mt-1">
-              Quorum: {adminCount > 1 ? `${Math.floor(adminCount / 2) + 1}/${adminCount} admin approvals required` : 'Single admin (instant approval)'}
-            </div>
-          </div>
-        </div>
       </CardContent>
     </Card>
   )

@@ -18,8 +18,9 @@ export function formatViemError(error: any): string {
   // Extract revert reason from error
   const errorString = JSON.stringify(error)
 
-  // Check for common access control errors
-  if (errorString.includes('OwnableUnauthorizedAccount') || errorString.includes('Ownable:')) {
+  // Check for common access control errors (only for execution reverted, not read failures)
+  if (error.message?.includes('execution reverted') &&
+      (errorString.includes('OwnableUnauthorizedAccount') || errorString.includes('Ownable:'))) {
     return 'Access denied: Only the contract owner can call this function'
   }
 

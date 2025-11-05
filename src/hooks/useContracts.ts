@@ -22,34 +22,51 @@ export function useContracts() {
       setLoading(true)
       setError(null)
 
-      try {
-        // 1. Detect deployment pattern
-        const { pattern, deploymentInfo } = await detectDeploymentPattern()
-        setDeploymentPattern(pattern)
+      const contracts: DeployedContract[] = []
 
-        if (!deploymentInfo) {
-          throw new Error('No deployment found')
+      try {
+        // 1. ALWAYS load validator contract first (genesis contract at 0x9999)
+        await addValidatorContract(contracts)
+
+        // 2. Try to detect and load deployment pattern contracts
+        try {
+          const { pattern, deploymentInfo } = await detectDeploymentPattern()
+          setDeploymentPattern(pattern)
+
+          if (deploymentInfo) {
+            // Load contracts based on pattern
+            if (isFactoryPattern(deploymentInfo)) {
+              await loadFactoryContracts(deploymentInfo, contracts)
+            } else {
+              await loadSharedProxyContracts(deploymentInfo, contracts)
+            }
+          }
+        } catch (patternError) {
+          console.warn('Error loading pattern contracts (validator still available):', patternError)
+          // Don't throw - validator contract is still loaded
         }
 
-        // 2. Load contracts based on pattern
-        if (isFactoryPattern(deploymentInfo)) {
-          await loadFactoryContracts(deploymentInfo)
+        // Set contracts even if pattern loading failed
+        if (contracts.length > 0) {
+          setContracts(contracts)
         } else {
-          await loadSharedProxyContracts(deploymentInfo)
+          throw new Error('No contracts loaded')
         }
       } catch (error) {
         console.error('Error loading contracts:', error)
         setError(error instanceof Error ? error.message : 'Failed to load contracts')
+        // Still try to set validator contract if we have it
+        if (contracts.length > 0) {
+          setContracts(contracts)
+        }
       } finally {
         setLoading(false)
       }
     }
 
     // Load factory pattern contracts
-    async function loadFactoryContracts(info: FactoryDeploymentInfo) {
+    async function loadFactoryContracts(info: FactoryDeploymentInfo, contracts: DeployedContract[]) {
       console.log('📦 Loading factory pattern contracts...')
-
-      const contracts: DeployedContract[] = []
 
       // 1. Load ManufacturerRegistry
       const registryAbi = await loadABI('ManufacturerRegistry')
@@ -75,8 +92,6 @@ export function useContracts() {
 
       // 3. Load implementation ABI (for proxy interactions)
       const implementationAbi = await loadABI('LogisticsOrder')
-
-      setContracts(contracts)
 
       // 4. Initialize factory service and load manufacturer proxies
       if (factoryAbi && registryAbi && implementationAbi) {
@@ -128,13 +143,11 @@ export function useContracts() {
             implementation,
           })
         }
-
-        setContracts(contracts)
       }
     }
 
     // Load shared proxy pattern contracts (existing logic)
-    async function loadSharedProxyContracts(deploymentInfo: DeploymentInfo) {
+    async function loadSharedProxyContracts(deploymentInfo: DeploymentInfo, contracts: DeployedContract[]) {
       console.log('📦 Loading shared proxy pattern contracts...')
 
       const contractPromises = Object.entries(deploymentInfo.contracts)
@@ -193,11 +206,32 @@ export function useContracts() {
           }
         })
 
-      const contracts = (await Promise.all(contractPromises)).filter(
+      const loadedContracts = (await Promise.all(contractPromises)).filter(
         (c): c is DeployedContract => c !== null
       )
 
-      setContracts(contracts)
+      contracts.push(...loadedContracts)
+    }
+
+    // Add validator contract manually (genesis contract)
+    async function addValidatorContract(contracts: DeployedContract[]) {
+      try {
+        const response = await fetch('/artifacts/DynamicMultiSigValidatorManager.json')
+        if (response.ok) {
+          const artifact = await response.json()
+          contracts.push({
+            name: 'Validator Management',
+            address: '0x0000000000000000000000000000000000009999' as Address,
+            abi: artifact.abi as Abi,
+            isProxy: false,
+            sourceCode: artifact.sourceCode,
+            isVerified: !!artifact.sourceCode,
+          })
+          console.log('✅ Added Validator Management contract' + (artifact.sourceCode ? ' with verified source code' : ''))
+        }
+      } catch (error) {
+        console.error('Error loading validator contract:', error)
+      }
     }
 
     loadContracts()

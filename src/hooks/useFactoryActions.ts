@@ -3,7 +3,7 @@ import { useContractStore } from '@/store/contractStore'
 import { useAccountStore, selectCurrentAccount, selectCurrentAccountIndex } from '@/store/accountStore'
 import { createWalletClientForAccount, getActiveAccounts } from '@/lib/viem'
 import { publicClient } from '@/lib/viem'
-import { getContract } from 'viem'
+import { getContract, decodeEventLog } from 'viem'
 import type { Address, Abi } from 'viem'
 
 /**
@@ -86,24 +86,30 @@ export function useFactoryActions() {
         throw new Error('Transaction failed')
       }
 
-      // Parse ProxyDeployed event to get proxy address
-      const proxyDeployedEvent = receipt.logs.find((log: any) => {
-        try {
-          const decoded = factory.abi.find(
-            (item: any) => item.type === 'event' && item.name === 'ProxyDeployed'
-          )
-          return decoded && log.topics[0] === decoded.signature
-        } catch {
-          return false
-        }
-      })
+      // Parse ProxyDeployed event to get proxy address using viem's decodeEventLog
+      let proxyAddress: Address | null = null
 
-      if (!proxyDeployedEvent) {
-        throw new Error('ProxyDeployed event not found')
+      for (const log of receipt.logs) {
+        try {
+          const decoded = decodeEventLog({
+            abi: factory.abi,
+            data: log.data,
+            topics: log.topics,
+          })
+
+          if (decoded.eventName === 'ProxyDeployed') {
+            proxyAddress = (decoded.args as any).proxyAddress
+            break
+          }
+        } catch {
+          // Skip logs that don't match
+          continue
+        }
       }
 
-      // Get proxy address from event (second topic is manufacturer, third is proxyAddress)
-      const proxyAddress = `0x${proxyDeployedEvent.topics[2]?.slice(26)}` as Address
+      if (!proxyAddress) {
+        throw new Error('ProxyDeployed event not found')
+      }
 
       console.log('✅ Proxy deployed:', proxyAddress)
 

@@ -7,6 +7,8 @@ export interface DeployedContract {
   isProxy: boolean
   implementation?: Address
   proxyType?: 'UUPS' | 'Transparent' | 'Unknown'
+  sourceCode?: string
+  isVerified?: boolean
 }
 
 export interface ContractFunction {

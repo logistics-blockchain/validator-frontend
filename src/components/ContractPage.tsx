@@ -78,15 +78,23 @@ export function ContractPage({
 
   // Try to decode event log
   const decodeLog = (log: { address: string; topics: Hash[]; data: string }) => {
-    if (!contract) return null
+    if (!contract) {
+      console.log('[ContractPage] decodeLog: no contract found')
+      return null
+    }
 
     try {
-      return decodeEventLog({
+      const decoded = decodeEventLog({
         abi: contract.abi,
         data: log.data as Hash,
         topics: log.topics,
       })
-    } catch {
+      console.log('[ContractPage] Successfully decoded event:', decoded.eventName)
+      return decoded
+    } catch (error) {
+      console.error('[ContractPage] Failed to decode event:', error)
+      console.log('[ContractPage] Event data:', { address: log.address, topics: log.topics, data: log.data })
+      console.log('[ContractPage] Contract:', contract.name, 'ABI events:', contract.abi.filter((item: any) => item.type === 'event').map((e: any) => e.name))
       return null
     }
   }
@@ -379,12 +387,32 @@ export function ContractPage({
           {/* Code Tab */}
           {activeTab === 'code' && addressInfo && (
             <div className="space-y-4">
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-2">Contract Bytecode</h3>
-                <div className="bg-gray-50 p-4 rounded border font-mono text-xs break-all max-h-96 overflow-y-auto">
-                  {addressInfo.code || 'No bytecode available'}
+              {/* Verification Status */}
+              {contract.sourceCode && (
+                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded">
+                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span className="text-sm font-medium text-green-800">Contract Source Code Verified</span>
                 </div>
-              </div>
+              )}
+
+              {/* Source Code (if available) */}
+              {contract.sourceCode ? (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Contract Source Code (Solidity)</h3>
+                  <div className="bg-gray-50 p-4 rounded border font-mono text-xs max-h-[500px] overflow-y-auto whitespace-pre">
+                    {contract.sourceCode}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Contract Bytecode</h3>
+                  <div className="bg-gray-50 p-4 rounded border font-mono text-xs break-all max-h-96 overflow-y-auto">
+                    {addressInfo.code || 'No bytecode available'}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Contract ABI</h3>

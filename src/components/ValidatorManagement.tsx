@@ -18,6 +18,17 @@ interface AdminProposal {
   signatureCount: number
 }
 
+interface ValidatorProposal {
+  id: number
+  candidate: Address
+  isApproval: boolean
+  executed: boolean
+  createdAt: bigint
+  reason: string
+  signatures: Address[]
+  signatureCount: number
+}
+
 interface TransactionStatus {
   type: 'add_validator' | 'remove_validator' | 'add_admin' | 'sign_proposal' | 'approve_validator'
   status: 'pending' | 'success' | 'error'
@@ -43,6 +54,9 @@ export function ValidatorManagement() {
   const [contractAbi, setContractAbi] = useState<Abi | null>(null)
   const [abiLoadError, setAbiLoadError] = useState<string | null>(null)
   const [pendingAdminProposals, setPendingAdminProposals] = useState<AdminProposal[]>([])
+  const [completedAdminProposals, setCompletedAdminProposals] = useState<AdminProposal[]>([])
+  const [pendingValidatorProposals, setPendingValidatorProposals] = useState<ValidatorProposal[]>([])
+  const [completedValidatorProposals, setCompletedValidatorProposals] = useState<ValidatorProposal[]>([])
   const [txStatus, setTxStatus] = useState<TransactionStatus | null>(null)
 
   // Load contract ABI
@@ -120,8 +134,9 @@ export function ValidatorManagement() {
       }) as boolean
       setIsAdmin(adminStatus)
 
-      // Load pending admin proposals
+      // Load pending admin proposals and validator proposals
       await loadAdminProposals()
+      await loadValidatorProposals()
     } catch (error) {
       console.error('Error loading contract state:', error)
     }
@@ -131,9 +146,10 @@ export function ValidatorManagement() {
     if (!contractAbi) return
 
     try {
-      const proposals: AdminProposal[] = []
+      const pending: AdminProposal[] = []
+      const completed: AdminProposal[] = []
 
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 20; i++) {
         try {
           const proposal = await publicClient.readContract({
             address: VALIDATOR_CONTRACT,
@@ -144,7 +160,7 @@ export function ValidatorManagement() {
 
           const [candidate, isAddition, executed, createdAt] = proposal
 
-          if (!executed && candidate !== '0x0000000000000000000000000000000000000000') {
+          if (candidate !== '0x0000000000000000000000000000000000000000') {
             const signatures = await publicClient.readContract({
               address: VALIDATOR_CONTRACT,
               abi: contractAbi,
@@ -152,7 +168,7 @@ export function ValidatorManagement() {
               args: [BigInt(i)],
             }) as Address[]
 
-            proposals.push({
+            const proposalData: AdminProposal = {
               id: i,
               candidate,
               isAddition,
@@ -160,17 +176,82 @@ export function ValidatorManagement() {
               createdAt,
               signatures,
               signatureCount: signatures.length,
-            })
+            }
+
+            if (executed) {
+              completed.push(proposalData)
+            } else {
+              pending.push(proposalData)
+            }
           }
         } catch (err) {
           continue
         }
       }
 
-      setPendingAdminProposals(proposals)
+      setPendingAdminProposals(pending)
+      setCompletedAdminProposals(completed)
     } catch (error) {
       console.error('ERROR loading admin proposals:', error)
       setPendingAdminProposals([])
+      setCompletedAdminProposals([])
+    }
+  }
+
+  const loadValidatorProposals = async () => {
+    if (!contractAbi) return
+
+    try {
+      const pending: ValidatorProposal[] = []
+      const completed: ValidatorProposal[] = []
+
+      for (let i = 0; i < 20; i++) {
+        try {
+          const proposal = await publicClient.readContract({
+            address: VALIDATOR_CONTRACT,
+            abi: contractAbi,
+            functionName: 'validatorProposals',
+            args: [BigInt(i)],
+          }) as [Address, boolean, boolean, string, bigint]
+
+          const [candidate, isApproval, executed, reason, createdAt] = proposal
+
+          if (candidate !== '0x0000000000000000000000000000000000000000') {
+            const signatures = await publicClient.readContract({
+              address: VALIDATOR_CONTRACT,
+              abi: contractAbi,
+              functionName: 'getValidatorProposalSignatures',
+              args: [BigInt(i)],
+            }) as Address[]
+
+            const proposalData: ValidatorProposal = {
+              id: i,
+              candidate,
+              isApproval,
+              executed,
+              createdAt,
+              reason,
+              signatures,
+              signatureCount: signatures.length,
+            }
+
+            if (executed) {
+              completed.push(proposalData)
+            } else {
+              pending.push(proposalData)
+            }
+          }
+        } catch (err) {
+          continue
+        }
+      }
+
+      setPendingValidatorProposals(pending)
+      setCompletedValidatorProposals(completed)
+    } catch (error) {
+      console.error('ERROR loading validator proposals:', error)
+      setPendingValidatorProposals([])
+      setCompletedValidatorProposals([])
     }
   }
 
@@ -418,10 +499,10 @@ export function ValidatorManagement() {
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-6 space-y-6">
+      <CardContent className="p-6">
         {/* ABI Load Error */}
         {abiLoadError && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <div className="p-4 bg-red-50 border border-red-200 rounded-md mb-6">
             <p className="text-sm text-red-800 font-semibold">Failed to Initialize Contract Interface</p>
             <p className="text-xs text-red-600 mt-1">{abiLoadError}</p>
             <p className="text-xs text-red-600 mt-1">Validator management functions will not be available.</p>
@@ -429,7 +510,7 @@ export function ValidatorManagement() {
         )}
 
         {/* Contract Info - Moved to top */}
-        <div className="grid grid-cols-[150px_1fr] gap-y-3 text-sm">
+        <div className="grid grid-cols-[150px_1fr] gap-y-3 text-sm mb-6">
           <div className="text-gray-500">Contract:</div>
           <div className="font-mono text-xs">{VALIDATOR_CONTRACT}</div>
 
@@ -494,7 +575,7 @@ export function ValidatorManagement() {
         )}
 
         {/* Account Selector */}
-        <div>
+        <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Acting As Account
           </label>
@@ -511,57 +592,75 @@ export function ValidatorManagement() {
           </select>
         </div>
 
-        {/* Current Admins */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Current Admins ({currentAdmins.length})</h3>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {currentAdmins.map((admin, index) => (
-              <div key={admin} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <div>
-                  <div className="font-mono text-sm">{admin}</div>
-                  <div className="text-xs text-gray-500">Admin #{index + 1}</div>
+        {/* ==================== ADMIN MANAGEMENT SECTION ==================== */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-6 pb-3 border-b-2 border-blue-200">
+            <div className="h-8 w-1 bg-blue-500 rounded-full"></div>
+            <h2 className="text-xl font-bold text-gray-800">Admin Panel</h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column: Current Admins */}
+            <div className="space-y-6">
+              {/* Current Admins */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Current Admins ({currentAdmins.length})</h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {currentAdmins.map((admin, index) => (
+                    <div key={admin} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                      <div>
+                        <div className="font-mono text-sm">{admin}</div>
+                        <div className="text-xs text-gray-500">Admin #{index + 1}</div>
+                      </div>
+                      <Badge variant="success">Active</Badge>
+                    </div>
+                  ))}
                 </div>
-                <Badge variant="success">Active</Badge>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Add New Admin */}
-        {isAdmin && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Add New Admin</h3>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newAdminAddress}
-                onChange={(e) => setNewAdminAddress(e.target.value)}
-                placeholder="0x..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              />
-              <Button
-                onClick={handleAddAdmin}
-                disabled={loading || !newAdminAddress}
-              >
-                {loading ? 'Adding...' : 'Add Admin'}
-              </Button>
             </div>
-          </div>
-        )}
 
-        {/* Pending Admin Proposals */}
-        {pendingAdminProposals.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Pending Admin Proposals ({pendingAdminProposals.length})
-            </h3>
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {pendingAdminProposals.map((proposal) => {
+            {/* Right Column: Admin Actions and Proposals */}
+            <div className="space-y-6">
+              {/* Add New Admin */}
+              {isAdmin && (
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Add New Admin</h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newAdminAddress}
+                      onChange={(e) => setNewAdminAddress(e.target.value)}
+                      placeholder="0x..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    />
+                    <Button
+                      onClick={handleAddAdmin}
+                      disabled={loading || !newAdminAddress}
+                    >
+                      {loading ? 'Adding...' : 'Add Admin'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Admin Proposals */}
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">
+            Admin Proposals ({pendingAdminProposals.length} pending)
+          </h3>
+          <div className="space-y-3 max-h-60 overflow-y-auto">
+            {pendingAdminProposals.length === 0 ? (
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
+                <p className="text-sm text-gray-500">No pending admin proposals</p>
+              </div>
+            ) : (
+              pendingAdminProposals.map((proposal) => {
                 const threshold = Math.floor(currentAdmins.length / 2) + 1
                 const walletClient = createWalletClientForAccount(selectedAccount)
                 const hasSignedProposal = proposal.signatures.some(
                   sig => sig.toLowerCase() === walletClient.account.address.toLowerCase()
                 )
+                const createdDate = new Date(Number(proposal.createdAt) * 1000)
 
                 return (
                   <div key={proposal.id} className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
@@ -570,6 +669,9 @@ export function ValidatorManagement() {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold text-gray-600">Proposal #{proposal.id}</span>
                           <Badge variant="warning">Pending</Badge>
+                          <Badge variant={proposal.isAddition ? 'default' : 'destructive'}>
+                            {proposal.isAddition ? 'Add' : 'Remove'}
+                          </Badge>
                         </div>
                         <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
                         <div className="text-xs text-gray-600">
@@ -578,6 +680,9 @@ export function ValidatorManagement() {
                             Signed by: {proposal.signatures.length > 0
                               ? proposal.signatures.map(s => s.slice(0, 8) + '...').join(', ')
                               : 'None'}
+                          </div>
+                          <div className="mt-1 text-gray-500">
+                            Created: {createdDate.toLocaleString()}
                           </div>
                         </div>
                       </div>
@@ -597,99 +702,257 @@ export function ValidatorManagement() {
                     </div>
                   </div>
                 )
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Current Validators */}
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">Current Validators ({currentValidators.length})</h3>
-          <div className="space-y-2 max-h-40 overflow-y-auto">
-            {currentValidators.map((validator, index) => (
-              <div key={validator} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                <div>
-                  <div className="font-mono text-sm">{validator}</div>
-                  <div className="text-xs text-gray-500">Validator #{index + 1}</div>
-                </div>
-                <Badge variant="success">Active</Badge>
-              </div>
-            ))}
+              })
+            )}
           </div>
         </div>
 
-        {/* Pending Applications */}
-        {pendingApplications.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Pending Applications ({pendingApplications.length})
-            </h3>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
-              {pendingApplications.map((validator) => (
-                <div key={validator} className="flex items-center justify-between p-3 bg-yellow-50 rounded-md">
-                  <div className="font-mono text-sm">{validator}</div>
-                  {isAdmin && (
-                    <Button
-                      onClick={() => handleApproveValidator(validator)}
-                      disabled={loading}
-                      size="sm"
-                      variant="default"
-                    >
-                      Approve
-                    </Button>
-                  )}
-                  {!isAdmin && <Badge variant="warning">Pending</Badge>}
-                </div>
-              ))}
+            {/* Completed Admin Proposals */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                Completed Admin Proposals ({completedAdminProposals.length})
+              </h3>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {completedAdminProposals.length === 0 ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
+                    <p className="text-sm text-gray-500">No completed admin proposals</p>
+                  </div>
+                ) : (
+                  completedAdminProposals.slice().reverse().map((proposal) => {
+                    const createdDate = new Date(Number(proposal.createdAt) * 1000)
+
+                    return (
+                      <div key={proposal.id} className="p-3 bg-green-50 border border-green-200 rounded-md">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-gray-600">Proposal #{proposal.id}</span>
+                              <Badge variant="success">Executed</Badge>
+                              <Badge variant={proposal.isAddition ? 'default' : 'destructive'}>
+                                {proposal.isAddition ? 'Add' : 'Remove'}
+                              </Badge>
+                            </div>
+                            <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                            <div className="text-xs text-gray-600">
+                              <div>Signatures: {proposal.signatureCount}</div>
+                              <div className="mt-1">
+                                Signed by: {proposal.signatures.length > 0
+                                  ? proposal.signatures.map(s => s.slice(0, 8) + '...').join(', ')
+                                  : 'None'}
+                              </div>
+                              <div className="mt-1 text-gray-500">
+                                Created: {createdDate.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Admin Controls */}
-        {isAdmin && (
-          <>
-            {/* Add Validator */}
-            <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Propose Adding Validator</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newValidatorAddress}
-                  onChange={(e) => setNewValidatorAddress(e.target.value)}
-                  placeholder="0x..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
-                <Button
-                  onClick={handleAddValidator}
-                  disabled={loading || !newValidatorAddress}
-                >
-                  {loading ? 'Proposing...' : 'Propose Addition'}
-                </Button>
+        {/* ==================== VALIDATOR MANAGEMENT SECTION ==================== */}
+        <div className="mb-8">
+          <div className="flex items-center gap-3 mb-6 pb-3 border-b-2 border-green-200">
+            <div className="h-8 w-1 bg-green-500 rounded-full"></div>
+            <h2 className="text-xl font-bold text-gray-800">Validator Panel</h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column: Current Validators */}
+            <div className="space-y-6">
+              {/* Current Validators */}
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Current Validators ({currentValidators.length})</h3>
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {currentValidators.map((validator, index) => (
+                    <div key={validator} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                      <div>
+                        <div className="font-mono text-sm">{validator}</div>
+                        <div className="text-xs text-gray-500">Validator #{index + 1}</div>
+                      </div>
+                      <Badge variant="success">Active</Badge>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Remove Validator */}
+            {/* Right Column: Validator Actions and Proposals */}
+            <div className="space-y-6">
+            {/* Validator Applications Awaiting Review */}
             <div>
-              <h3 className="text-sm font-semibold text-gray-700 mb-3">Propose Removing Validator</h3>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={removeValidatorAddress}
-                  onChange={(e) => setRemoveValidatorAddress(e.target.value)}
-                  placeholder="0x..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono text-sm"
-                />
-                <Button
-                  onClick={handleRemoveValidator}
-                  disabled={loading || !removeValidatorAddress}
-                  variant="destructive"
-                >
-                  {loading ? 'Proposing...' : 'Propose Removal'}
-                </Button>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                Validator Applications Awaiting Review ({pendingApplications.length})
+              </h3>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {pendingApplications.length === 0 ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
+                    <p className="text-sm text-gray-500">No pending validator applications</p>
+                  </div>
+                ) : (
+                  pendingApplications.map((validator) => (
+                    <div key={validator} className="flex items-center justify-between p-3 bg-yellow-50 rounded-md">
+                      <div className="font-mono text-sm">{validator}</div>
+                      {isAdmin && (
+                        <Button
+                          onClick={() => handleApproveValidator(validator)}
+                          disabled={loading}
+                          size="sm"
+                          variant="default"
+                        >
+                          Approve
+                        </Button>
+                      )}
+                      {!isAdmin && <Badge variant="warning">Pending</Badge>}
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-          </>
-        )}
+
+            {/* Pending Validator Proposals */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                Validator Proposals ({pendingValidatorProposals.length} pending)
+              </h3>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {pendingValidatorProposals.length === 0 ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
+                    <p className="text-sm text-gray-500">No pending validator proposals</p>
+                  </div>
+                ) : (
+                  pendingValidatorProposals.map((proposal) => {
+                    const threshold = Math.floor(currentAdmins.length / 2) + 1
+                    const hasSignedProposal = proposal.signatures.includes(getActiveAccounts()[selectedAccount]?.address as Address)
+                    const createdDate = new Date(Number(proposal.createdAt) * 1000)
+
+                    return (
+                      <div key={proposal.id} className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-gray-600">Proposal #{proposal.id}</span>
+                              <Badge variant={proposal.isApproval ? 'default' : 'destructive'}>
+                                {proposal.isApproval ? 'Approve' : 'Remove'}
+                              </Badge>
+                            </div>
+                            <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                            <div className="text-xs text-gray-600">
+                              <div>Signatures: {proposal.signatureCount}/{threshold}</div>
+                              {proposal.reason && (
+                                <div className="mt-1">Reason: {proposal.reason}</div>
+                              )}
+                              <div className="mt-1 text-gray-500">
+                                Created: {createdDate.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Completed Validator Proposals */}
+            <div>
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">
+                Completed Validator Proposals ({completedValidatorProposals.length})
+              </h3>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {completedValidatorProposals.length === 0 ? (
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-md text-center">
+                    <p className="text-sm text-gray-500">No completed validator proposals</p>
+                  </div>
+                ) : (
+                  completedValidatorProposals.slice().reverse().map((proposal) => {
+                    const createdDate = new Date(Number(proposal.createdAt) * 1000)
+
+                    return (
+                      <div key={proposal.id} className="p-3 bg-green-50 border border-green-200 rounded-md">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-gray-600">Proposal #{proposal.id}</span>
+                              <Badge variant="success">Executed</Badge>
+                              <Badge variant={proposal.isApproval ? 'default' : 'destructive'}>
+                                {proposal.isApproval ? 'Approve' : 'Remove'}
+                              </Badge>
+                            </div>
+                            <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                            <div className="text-xs text-gray-600">
+                              <div>Signatures: {proposal.signatureCount}</div>
+                              {proposal.reason && (
+                                <div className="mt-1">Reason: {proposal.reason}</div>
+                              )}
+                              <div className="mt-1 text-gray-500">
+                                Created: {createdDate.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Admin Controls */}
+            {isAdmin && (
+              <>
+                {/* Add Validator */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Propose Adding Validator</h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newValidatorAddress}
+                      onChange={(e) => setNewValidatorAddress(e.target.value)}
+                      placeholder="0x..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    />
+                    <Button
+                      onClick={handleAddValidator}
+                      disabled={loading || !newValidatorAddress}
+                    >
+                      {loading ? 'Proposing...' : 'Propose Addition'}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Remove Validator */}
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Propose Removing Validator</h3>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={removeValidatorAddress}
+                      onChange={(e) => setRemoveValidatorAddress(e.target.value)}
+                      placeholder="0x..."
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 font-mono text-sm"
+                    />
+                    <Button
+                      onClick={handleRemoveValidator}
+                      disabled={loading || !removeValidatorAddress}
+                      variant="destructive"
+                    >
+                      {loading ? 'Proposing...' : 'Propose Removal'}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          </div>
+        </div>
 
         {/* Non-Admin Message */}
         {!isAdmin && (

@@ -3,6 +3,7 @@ import { useContractStore } from '@/store/contractStore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
+import { AddressLink } from './AddressLink'
 import { formatAddress } from '@/lib/utils'
 import { CheckCircle2, XCircle, Eye } from 'lucide-react'
 
@@ -33,15 +34,21 @@ export function FactoryDashboard() {
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-500">Factory Address:</span>
-              <div className="font-mono text-xs mt-1">{formatAddress(factoryInfo.factoryAddress)}</div>
+              <div className="text-xs mt-1">
+                <AddressLink address={factoryInfo.factoryAddress} />
+              </div>
             </div>
             <div>
               <span className="text-gray-500">Implementation:</span>
-              <div className="font-mono text-xs mt-1">{formatAddress(factoryInfo.implementation)}</div>
+              <div className="text-xs mt-1">
+                <AddressLink address={factoryInfo.implementation} />
+              </div>
             </div>
             <div>
               <span className="text-gray-500">Registry:</span>
-              <div className="font-mono text-xs mt-1">{formatAddress(factoryInfo.registry)}</div>
+              <div className="text-xs mt-1">
+                <AddressLink address={factoryInfo.registry} />
+              </div>
             </div>
             <div>
               <span className="text-gray-500">Total Proxies Deployed:</span>
@@ -90,7 +97,9 @@ export function FactoryDashboard() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="font-mono text-xs">{formatAddress(mfr.manufacturer)}</div>
+                        <div className="text-xs">
+                          <AddressLink address={mfr.manufacturer} />
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm">
@@ -102,7 +111,9 @@ export function FactoryDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {hasProxy ? (
-                          <div className="font-mono text-xs">{formatAddress(mfr.proxyAddress)}</div>
+                          <div className="text-xs">
+                            <AddressLink address={mfr.proxyAddress} />
+                          </div>
                         ) : (
                           <span className="text-gray-400 text-xs">Not deployed</span>
                         )}

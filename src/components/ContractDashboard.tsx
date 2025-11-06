@@ -4,6 +4,7 @@ import { FunctionForm } from './FunctionForm'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
+import { AddressLink } from './AddressLink'
 import { formatAddress } from '@/lib/utils'
 import { Copy, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
 import type { ContractFunction, Order } from '@/types/contracts'
@@ -289,8 +290,8 @@ export function ContractDashboard() {
                     <div className="font-medium">{contract.name}</div>
 
                     <div className="text-gray-500">Address:</div>
-                    <div className="flex items-center gap-2 font-mono text-xs">
-                      {contract.address}
+                    <div className="flex items-center gap-2 text-xs">
+                      <AddressLink address={contract.address} showFull />
                       <Button size="icon" variant="ghost" onClick={() => copyToClipboard(contract.address)} className="h-6 w-6">
                         <Copy className="h-4 w-4" />
                       </Button>
@@ -302,8 +303,8 @@ export function ContractDashboard() {
                         <div><Badge variant="warning">{contract.proxyType} Proxy</Badge></div>
 
                         <div className="text-gray-500">Implementation:</div>
-                        <div className="flex items-center gap-2 font-mono text-xs">
-                          {contract.implementation}
+                        <div className="flex items-center gap-2 text-xs">
+                          <AddressLink address={contract.implementation!} showFull />
                           <Button size="icon" variant="ghost" onClick={() => copyToClipboard(contract.implementation!)} className="h-6 w-6">
                             <Copy className="h-4 w-4" />
                           </Button>

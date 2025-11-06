@@ -186,21 +186,6 @@ export function ContractPage({
                 </>
               )}
             </div>
-
-            {/* Link to account page */}
-            {onViewAccount && (
-              <div className="pt-4 border-t">
-                <Button
-                  onClick={() => onViewAccount(address)}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  View in Account Explorer
-                </Button>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>

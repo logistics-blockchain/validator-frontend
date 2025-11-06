@@ -194,29 +194,18 @@ export function AccountPage({
             </div>
 
             {/* Action buttons */}
+            {!addressInfo.isContract && (
             <div className="pt-4 border-t flex gap-2">
-              {isKnownContract && onViewContract && (
-                <Button
-                  onClick={() => onViewContract(address)}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  View Contract Interface
-                </Button>
-              )}
-              {!addressInfo.isContract && (
-                <Button
-                  onClick={() => setActiveTab('nfts')}
-                  variant={nfts.length > 0 ? 'default' : 'outline'}
-                  size="sm"
-                  className="gap-2"
-                >
-                  View NFTs ({nftsLoading ? '...' : nfts.length})
-                </Button>
-              )}
+              <Button
+                onClick={() => setActiveTab('nfts')}
+                variant={nfts.length > 0 ? 'default' : 'outline'}
+                size="sm"
+                className="gap-2"
+              >
+                View NFTs ({nftsLoading ? '...' : nfts.length})
+              </Button>
             </div>
+            )}
           </div>
         </CardContent>
       </Card>

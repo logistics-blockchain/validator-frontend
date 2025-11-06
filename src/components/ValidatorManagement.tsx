@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
+import { AddressLink } from './AddressLink'
 import { publicClient, createWalletClientForAccount, getActiveAccounts } from '@/lib/viem'
 import { parseAbi, type Address, type Abi } from 'viem'
 import { formatAddress } from '@/lib/utils'
@@ -512,7 +513,9 @@ export function ValidatorManagement() {
         {/* Contract Info - Moved to top */}
         <div className="grid grid-cols-[150px_1fr] gap-y-3 text-sm mb-6">
           <div className="text-gray-500">Contract:</div>
-          <div className="font-mono text-xs">{VALIDATOR_CONTRACT}</div>
+          <div className="text-xs">
+            <AddressLink address={VALIDATOR_CONTRACT} showFull />
+          </div>
 
           <div className="text-gray-500">Quorum:</div>
           <div className="font-medium">
@@ -552,7 +555,7 @@ export function ValidatorManagement() {
 
             {txStatus.target && (
               <div className="text-xs text-gray-600 mb-2">
-                Target: <span className="font-mono">{formatAddress(txStatus.target)}</span>
+                Target: <AddressLink address={txStatus.target} />
               </div>
             )}
 
@@ -609,7 +612,9 @@ export function ValidatorManagement() {
                   {currentAdmins.map((admin, index) => (
                     <div key={admin} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                       <div>
-                        <div className="font-mono text-sm">{admin}</div>
+                        <div className="text-sm">
+                          <AddressLink address={admin} />
+                        </div>
                         <div className="text-xs text-gray-500">Admin #{index + 1}</div>
                       </div>
                       <Badge variant="success">Active</Badge>
@@ -673,7 +678,9 @@ export function ValidatorManagement() {
                             {proposal.isAddition ? 'Add' : 'Remove'}
                           </Badge>
                         </div>
-                        <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                        <div className="text-sm mb-2">
+                          <AddressLink address={proposal.candidate} />
+                        </div>
                         <div className="text-xs text-gray-600">
                           <div>Signatures: {proposal.signatureCount}/{threshold} required</div>
                           <div className="mt-1">
@@ -732,7 +739,9 @@ export function ValidatorManagement() {
                                 {proposal.isAddition ? 'Add' : 'Remove'}
                               </Badge>
                             </div>
-                            <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                            <div className="text-sm mb-2">
+                              <AddressLink address={proposal.candidate} />
+                            </div>
                             <div className="text-xs text-gray-600">
                               <div>Signatures: {proposal.signatureCount}</div>
                               <div className="mt-1">
@@ -773,7 +782,9 @@ export function ValidatorManagement() {
                   {currentValidators.map((validator, index) => (
                     <div key={validator} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
                       <div>
-                        <div className="font-mono text-sm">{validator}</div>
+                        <div className="text-sm">
+                          <AddressLink address={validator} />
+                        </div>
                         <div className="text-xs text-gray-500">Validator #{index + 1}</div>
                       </div>
                       <Badge variant="success">Active</Badge>
@@ -798,7 +809,9 @@ export function ValidatorManagement() {
                 ) : (
                   pendingApplications.map((validator) => (
                     <div key={validator} className="flex items-center justify-between p-3 bg-yellow-50 rounded-md">
-                      <div className="font-mono text-sm">{validator}</div>
+                      <div className="text-sm">
+                        <AddressLink address={validator} />
+                      </div>
                       {isAdmin && (
                         <Button
                           onClick={() => handleApproveValidator(validator)}
@@ -842,7 +855,9 @@ export function ValidatorManagement() {
                                 {proposal.isApproval ? 'Approve' : 'Remove'}
                               </Badge>
                             </div>
-                            <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                            <div className="text-sm mb-2">
+                              <AddressLink address={proposal.candidate} />
+                            </div>
                             <div className="text-xs text-gray-600">
                               <div>Signatures: {proposal.signatureCount}/{threshold}</div>
                               {proposal.reason && (
@@ -886,7 +901,9 @@ export function ValidatorManagement() {
                                 {proposal.isApproval ? 'Approve' : 'Remove'}
                               </Badge>
                             </div>
-                            <div className="font-mono text-sm mb-2">{proposal.candidate}</div>
+                            <div className="text-sm mb-2">
+                              <AddressLink address={proposal.candidate} />
+                            </div>
                             <div className="text-xs text-gray-600">
                               <div>Signatures: {proposal.signatureCount}</div>
                               {proposal.reason && (

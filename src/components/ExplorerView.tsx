@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { BlockExplorer } from './BlockExplorer'
 import { BlockDetails } from './BlockDetails'
 import { TransactionDetails } from './TransactionDetails'
@@ -6,6 +6,7 @@ import { AccountPage } from './AccountPage'
 import { ContractPage } from './ContractPage'
 import { useContractStore } from '@/store/contractStore'
 import type { Hash, Address } from 'viem'
+import type { ExplorerInitialView } from '@/App'
 
 type View =
   | { type: 'list' }
@@ -14,9 +15,32 @@ type View =
   | { type: 'account'; address: Address }
   | { type: 'contract'; address: Address }
 
-export function ExplorerView() {
+interface ExplorerViewProps {
+  initialView?: ExplorerInitialView
+}
+
+export function ExplorerView({ initialView }: ExplorerViewProps) {
   const [view, setView] = useState<View>({ type: 'list' })
   const { contracts } = useContractStore()
+
+  useEffect(() => {
+    if (initialView?.address) {
+      const isKnownContract = contracts.some(
+        (c) => c.address.toLowerCase() === initialView.address!.toLowerCase()
+      )
+      if (isKnownContract) {
+        setView({ type: 'contract', address: initialView.address })
+      } else {
+        setView({ type: 'account', address: initialView.address })
+      }
+    } else if (initialView?.blockNumber) {
+      setView({ type: 'block', blockNumber: initialView.blockNumber })
+    } else if (initialView?.txHash) {
+      setView({ type: 'transaction', txHash: initialView.txHash })
+    } else {
+      setView({ type: 'list' })
+    }
+  }, [initialView, contracts])
 
   const handleViewAddress = (address: string) => {
     const addr = address as Address

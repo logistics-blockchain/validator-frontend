@@ -15,11 +15,34 @@ import { useFactoryActions } from './hooks/useFactoryActions'
 import { useFactoryEvents } from './hooks/useFactoryEvents'
 import { Button } from './components/ui/Button'
 import { RefreshCw, Home, Search, Shield } from 'lucide-react'
+import type { Hash, Address } from 'viem'
+import { createContext, useContext } from 'react'
+
+interface NavigationContextType {
+  navigateToExplorer: (initialView?: ExplorerInitialView) => void
+}
+
+const NavigationContext = createContext<NavigationContextType | null>(null)
+
+export function useNavigation() {
+  const context = useContext(NavigationContext)
+  if (!context) {
+    throw new Error('useNavigation must be used within NavigationContext.Provider')
+  }
+  return context
+}
 
 type AppView = 'dashboard' | 'explorer' | 'validators'
 
+export interface ExplorerInitialView {
+  address?: Address
+  blockNumber?: bigint
+  txHash?: Hash
+}
+
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard')
+  const [explorerInitialView, setExplorerInitialView] = useState<ExplorerInitialView | undefined>()
 
   // Initialize blockchain monitoring
   useWatchBlocks()
@@ -34,7 +57,17 @@ function App() {
   // Check if we're in factory mode
   const isFactoryMode = deploymentPattern === 'factory'
 
+  const navigateToExplorer = (initialView?: ExplorerInitialView) => {
+    setExplorerInitialView(initialView)
+    setCurrentView('explorer')
+  }
+
+  const navigationContextValue: NavigationContextType = {
+    navigateToExplorer,
+  }
+
   return (
+    <NavigationContext.Provider value={navigationContextValue}>
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="container mx-auto px-4 py-4">
@@ -63,7 +96,10 @@ function App() {
                   Validators
                 </Button>
                 <Button
-                  onClick={() => setCurrentView('explorer')}
+                  onClick={() => {
+                    setExplorerInitialView(undefined)
+                    setCurrentView('explorer')
+                  }}
                   variant={currentView === 'explorer' ? 'default' : 'ghost'}
                   size="sm"
                   className="gap-2"
@@ -116,7 +152,7 @@ function App() {
           <ValidatorView />
         ) : (
           /* Block Explorer View */
-          <ExplorerView />
+          <ExplorerView initialView={explorerInitialView} />
         )}
       </main>
 
@@ -126,6 +162,7 @@ function App() {
         </div>
       </footer>
     </div>
+    </NavigationContext.Provider>
   )
 }
 

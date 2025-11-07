@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { publicClient, getActiveAccounts } from '@/lib/viem'
+import { publicClient } from '@/lib/viem'
+import type { Address } from 'viem'
 
 export type NetworkStatus = 'healthy' | 'degraded' | 'critical' | 'unknown'
 
@@ -45,10 +46,20 @@ export function useNetworkHealth() {
 
         const blocks = await Promise.all(blockPromises)
 
-        // Count unique validators
+        // Get actual validator count from contract
+        const VALIDATOR_CONTRACT = '0x0000000000000000000000000000000000009999' as Address
+        const abiResponse = await fetch('/artifacts/DynamicMultiSigValidatorManager.json')
+        const { abi } = await abiResponse.json()
+        const validators = await publicClient.readContract({
+          address: VALIDATOR_CONTRACT,
+          abi,
+          functionName: 'getValidators',
+        }) as Address[]
+        const totalValidators = validators.length
+
+        // Count unique validators from recent blocks
         const uniqueValidators = new Set(blocks.map(b => b.miner.toLowerCase()))
         const activeValidators = uniqueValidators.size
-        const totalValidators = getActiveAccounts().length // Dynamic based on network config
 
         // Calculate block production rate (blocks per minute)
         const timeSpan = Number(blocks[blocks.length - 1].timestamp - blocks[0].timestamp)
@@ -97,16 +108,7 @@ export function useNetworkHealth() {
         })
       } catch (error) {
         console.error('Error checking network health:', error)
-        setHealth({
-          status: 'unknown',
-          activeValidators: 0,
-          totalValidators: getActiveAccounts().length,
-          blockProductionRate: 0,
-          missedBlocks: 0,
-          lastBlockTime: 0n,
-          uptime: 0,
-          consensusHealth: 'Unknown',
-        })
+        throw error
       } finally {
         if (isInitialLoad) {
           setLoading(false)

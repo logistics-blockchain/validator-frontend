@@ -82,7 +82,7 @@ export function ValidatorManagement() {
   useEffect(() => {
     if (!contractAbi) return
     loadContractState()
-    const interval = setInterval(loadContractState, 5000)
+    const interval = setInterval(loadContractState, 30000) // Reduced from 5s to 30s
     return () => clearInterval(interval)
   }, [selectedAccount, contractAbi])
 
@@ -150,7 +150,7 @@ export function ValidatorManagement() {
       const pending: AdminProposal[] = []
       const completed: AdminProposal[] = []
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 5; i++) { // Reduced from 20 to 5 to minimize RPC calls
         try {
           const proposal = await publicClient.readContract({
             address: VALIDATOR_CONTRACT,
@@ -206,7 +206,7 @@ export function ValidatorManagement() {
       const pending: ValidatorProposal[] = []
       const completed: ValidatorProposal[] = []
 
-      for (let i = 0; i < 20; i++) {
+      for (let i = 0; i < 5; i++) { // Reduced from 20 to 5 to minimize RPC calls
         try {
           const proposal = await publicClient.readContract({
             address: VALIDATOR_CONTRACT,

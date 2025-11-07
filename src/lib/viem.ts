@@ -1,146 +1,206 @@
 import { createPublicClient, createWalletClient, http } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import type { Chain } from 'viem'
+import type { Chain, Address } from 'viem'
 
-export const hardhat: Chain = {
-  id: 31337,
-  name: 'Hardhat',
-  nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
-  rpcUrls: {
-    default: { http: ['http://127.0.0.1:8545'] },
-  },
-  testnet: true,
+// Network configuration types
+export interface NetworkConfig {
+  id: string
+  name: string
+  chainId: number
+  rpcUrl: string
+  description?: string
+  enabled: boolean
 }
 
-export const besuLocal: Chain = {
-  id: 10001,
-  name: 'Besu Local',
-  nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
-  rpcUrls: {
-    default: { http: ['http://127.0.0.1:8545'] },
-  },
-  testnet: true,
+export interface NetworksConfig {
+  networks: NetworkConfig[]
+  defaultNetwork: string
 }
 
-export const besuCloud: Chain = {
-  id: 10001,
-  name: 'Besu Cloud',
-  nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
-  rpcUrls: {
-    default: { http: ['/api/rpc'] },
-  },
-  testnet: true,
+export interface Account {
+  address: Address
+  privateKey: `0x${string}`
 }
 
-// Hardhat's default 20 test accounts
-export const HARDHAT_ACCOUNTS = [
-  { address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' },
-  { address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', privateKey: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' },
-  { address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', privateKey: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' },
-  { address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906', privateKey: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6' },
-  { address: '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65', privateKey: '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' },
-  { address: '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', privateKey: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba' },
-  { address: '0x976EA74026E726554dB657fA54763abd0C3a0aa9', privateKey: '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' },
-  { address: '0x14dC79964da2C08b23698B3D3cc7Ca32193d9955', privateKey: '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356' },
-  { address: '0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f', privateKey: '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97' },
-  { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', privateKey: '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' },
-] as const
+// Load networks configuration
+let networksConfig: NetworksConfig | null = null
+let accounts: Account[] = []
 
-// Besu cloud validator accounts (4 QBFT validators)
-export const BESU_ACCOUNTS = [
-  { address: '0x9940632656841559a5e1c3a9eb749b560a2af771', privateKey: '0x07c0675ec3681c76e1d7ed39923440a2ae8aa01099f6ce27af35fd0afe3ed5a3' },  // Node 0 (152.70.182.220)
-  { address: '0x67821f32b9b2521b7a7783f520488d5a31291706', privateKey: '0x95914f4d71d648e6ef3e04361bf2905879cc61c9c51fec371e98b767023611e4' },  // Node 1 (92.5.95.144)
-  { address: '0x5cec6a25862c772e28d1016e71933a92ac336b30', privateKey: '0x725ce25916492a2a44ed160c5c0c406c847e949d2f65049b39bfe15f3bc6f388' },  // Node 2 (152.70.188.128)
-  { address: '0x235c74be7644025d75bbc434d3618498b365d339', privateKey: '0xd1fda28b1ddb1cf8bfab4636a076cfe3507de102d3f30892f0b3abc05469618d' },  // Node 3 (130.61.22.253)
-] as const
+async function loadNetworksConfig(): Promise<NetworksConfig> {
+  if (networksConfig) return networksConfig
 
-// Auto-detect which chain we're connected to
-async function detectChain(): Promise<Chain> {
-  // Try cloud via proxy first
   try {
-    const cloudClient = createPublicClient({
-      transport: http('/api/rpc', { timeout: 3000 }),
-    })
-    const chainId = await cloudClient.getChainId()
-    if (chainId === 10001) {
-      console.log('🔗 Detected Besu Cloud chain (10001) via proxy')
-      return besuCloud
+    const response = await fetch('/networks.config.json')
+    if (!response.ok) {
+      throw new Error(`Failed to load networks config: ${response.statusText}`)
     }
-  } catch (e) {
-    console.log('☁️ Cloud network not available via proxy, trying local...')
+    networksConfig = await response.json()
+    console.log('✅ Loaded networks configuration:', networksConfig)
+    return networksConfig
+  } catch (error) {
+    console.error('❌ Failed to load networks config:', error)
+    // Return default config as fallback
+    networksConfig = {
+      networks: [
+        {
+          id: 'besu-local',
+          name: 'Besu Local',
+          chainId: 10001,
+          rpcUrl: 'http://127.0.0.1:8545',
+          enabled: true
+        }
+      ],
+      defaultNetwork: 'besu-local'
+    }
+    return networksConfig
+  }
+}
+
+// Load accounts from environment variables
+function loadAccounts(): Account[] {
+  const privateKeysEnv = import.meta.env.VITE_PRIVATE_KEYS
+
+  if (!privateKeysEnv) {
+    console.warn('⚠️ No VITE_PRIVATE_KEYS found in environment variables')
+    console.warn('⚠️ Please add private keys to your .env file')
+    console.warn('⚠️ Using default development accounts as fallback')
+
+    // Return Hardhat's first 10 default accounts as fallback for development
+    return [
+      { address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' },
+      { address: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', privateKey: '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' },
+      { address: '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC', privateKey: '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' },
+      { address: '0x90F79bf6EB2c4f870365E785982E1f101E93b906', privateKey: '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6' },
+      { address: '0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65', privateKey: '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a' },
+      { address: '0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc', privateKey: '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba' },
+      { address: '0x976EA74026E726554dB657fA54763abd0C3a0aa9', privateKey: '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' },
+      { address: '0x14dC79964da2C08b23698B3D3cc7Ca32193d9955', privateKey: '0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356' },
+      { address: '0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f', privateKey: '0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97' },
+      { address: '0xa0Ee7A142d267C1f36714E4a8F75612F20a79720', privateKey: '0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6' },
+    ]
   }
 
-  // Try local
-  try {
-    const client = createPublicClient({
-      transport: http('http://127.0.0.1:8545', { timeout: 2000 }),
-    })
-    const chainId = await client.getChainId()
+  // Parse comma-separated private keys
+  const keys = privateKeysEnv.split(',').map(k => k.trim()).filter(k => k.length > 0)
 
-    if (chainId === 10001) {
-      console.log('🔗 Detected Besu Local chain (10001)')
-      return besuLocal
-    } else if (chainId === 31337) {
-      console.log('🔗 Detected Hardhat chain (31337)')
-      return hardhat
-    } else {
-      console.warn(`⚠️ Unknown chain ID: ${chainId}, defaulting to Besu Cloud`)
-      return besuCloud
+  if (keys.length === 0) {
+    console.warn('⚠️ VITE_PRIVATE_KEYS is empty')
+    return []
+  }
+
+  // Convert keys to accounts
+  const loadedAccounts = keys.map(key => {
+    const privateKey = key.startsWith('0x') ? key as `0x${string}` : `0x${key}` as `0x${string}`
+    const account = privateKeyToAccount(privateKey)
+    return {
+      address: account.address,
+      privateKey
     }
-  } catch (e) {
-    console.warn('⚠️ Chain detection failed, defaulting to Besu Cloud')
-    return besuCloud
+  })
+
+  console.log(`✅ Loaded ${loadedAccounts.length} accounts from environment`)
+  return loadedAccounts
+}
+
+// Convert NetworkConfig to Viem Chain
+function networkConfigToChain(config: NetworkConfig): Chain {
+  return {
+    id: config.chainId,
+    name: config.name,
+    nativeCurrency: { decimals: 18, name: 'Ether', symbol: 'ETH' },
+    rpcUrls: {
+      default: { http: [config.rpcUrl] },
+    },
+    testnet: true,
   }
 }
 
 // Chain state management
-let _chain: Chain = besuCloud // Default to Cloud since that's our deployment
-let _chainDetected = false
-let _publicClient = createPublicClient({
-  chain: besuCloud,
-  transport: http(),
-  batch: { multicall: true },
-  pollingInterval: 1_000,
-})
+let _activeNetworkId: string | null = null
+let _chain: Chain | null = null
+let _publicClient: ReturnType<typeof createPublicClient> | null = null
+let _initPromise: Promise<void> | null = null
 
-// Initialize chain detection and recreate client
-detectChain().then((chain) => {
-  _chain = chain
-  _chainDetected = true
+// Initialize networks and accounts
+async function initialize() {
+  if (_initPromise) return _initPromise
 
-  // Recreate public client with detected chain
+  _initPromise = (async () => {
+    // Load configuration
+    const config = await loadNetworksConfig()
+    accounts = loadAccounts()
+
+    // Determine default network
+    const defaultNetworkId = import.meta.env.VITE_DEFAULT_NETWORK || config.defaultNetwork
+    const defaultNetwork = config.networks.find(n => n.id === defaultNetworkId && n.enabled)
+
+    if (!defaultNetwork) {
+      throw new Error(`Default network "${defaultNetworkId}" not found or not enabled`)
+    }
+
+    // Set active network
+    await setActiveNetwork(defaultNetwork.id)
+  })()
+
+  return _initPromise
+}
+
+// Set the active network
+export async function setActiveNetwork(networkId: string) {
+  const config = await loadNetworksConfig()
+  const network = config.networks.find(n => n.id === networkId && n.enabled)
+
+  if (!network) {
+    throw new Error(`Network "${networkId}" not found or not enabled`)
+  }
+
+  _activeNetworkId = networkId
+  _chain = networkConfigToChain(network)
+
+  // Recreate public client with new chain
   _publicClient = createPublicClient({
-    chain: chain,
+    chain: _chain,
     transport: http(),
     batch: { multicall: true },
     pollingInterval: 1_000,
   })
 
-  console.log(`✅ Public client initialized for ${chain.name} (${chain.id})`)
-})
+  console.log(`✅ Switched to network: ${network.name} (Chain ID: ${network.chainId})`)
+  console.log(`   RPC: ${network.rpcUrl}`)
+}
 
-export const publicClient = new Proxy({} as ReturnType<typeof createPublicClient>, {
-  get(target, prop) {
-    return _publicClient[prop as keyof typeof _publicClient]
-  }
-})
+// Get all available networks
+export async function getAvailableNetworks(): Promise<NetworkConfig[]> {
+  const config = await loadNetworksConfig()
+  return config.networks.filter(n => n.enabled)
+}
 
+// Get active network ID
+export function getActiveNetworkId(): string | null {
+  return _activeNetworkId
+}
+
+// Get active chain
 export function getActiveChain(): Chain {
+  if (!_chain) {
+    throw new Error('Chain not initialized. Call initialize() first.')
+  }
   return _chain
 }
 
-export function getActiveAccounts() {
-  return _chain.id === 10001 ? BESU_ACCOUNTS : HARDHAT_ACCOUNTS
+// Get active accounts
+export function getActiveAccounts(): Account[] {
+  return accounts
 }
 
+// Create wallet client for specific account
 export function createWalletClientForAccount(accountIndex: number) {
-  const accounts = getActiveAccounts()
   const accountData = accounts[accountIndex]
   if (!accountData) {
-    throw new Error(`Account index ${accountIndex} out of range`)
+    throw new Error(`Account index ${accountIndex} out of range (have ${accounts.length} accounts)`)
   }
 
-  const account = privateKeyToAccount(accountData.privateKey as `0x${string}`)
+  const account = privateKeyToAccount(accountData.privateKey)
 
   return createWalletClient({
     account,
@@ -148,3 +208,18 @@ export function createWalletClientForAccount(accountIndex: number) {
     transport: http(),
   })
 }
+
+// Proxied public client for backward compatibility
+export const publicClient = new Proxy({} as ReturnType<typeof createPublicClient>, {
+  get(target, prop) {
+    if (!_publicClient) {
+      throw new Error('Public client not initialized')
+    }
+    return _publicClient[prop as keyof typeof _publicClient]
+  }
+})
+
+// Auto-initialize on module load
+initialize().catch(error => {
+  console.error('❌ Failed to initialize viem:', error)
+})

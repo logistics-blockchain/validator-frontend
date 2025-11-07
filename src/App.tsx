@@ -8,6 +8,7 @@ import { FactoryDashboard } from './components/FactoryDashboard'
 import { ManufacturerProxyPanel } from './components/ManufacturerProxyPanel'
 import { ExplorerView } from './components/ExplorerView'
 import { ValidatorView } from './components/ValidatorView'
+import { NetworkSelector } from './components/NetworkSelector'
 import { useWatchBlocks } from './hooks/useWatchBlocks'
 import { useAccountBalance } from './hooks/useAccountBalance'
 import { useContracts } from './hooks/useContracts'
@@ -110,16 +111,19 @@ function App() {
               </nav>
             </div>
 
-            <Button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              variant="outline"
-              size="sm"
-              className="gap-2 bg-white border-gray-300 hover:bg-gray-50"
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              <NetworkSelector />
+              <Button
+                onClick={handleRefresh}
+                disabled={refreshing}
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-white border-gray-300 hover:bg-gray-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
       </header>
@@ -158,7 +162,6 @@ function App() {
 
       <footer className="bg-white border-t mt-12">
         <div className="container mx-auto px-4 py-6 text-center text-gray-600 text-sm">
-          Hardhat Development UI - Built with Vite + React + TypeScript + Viem
         </div>
       </footer>
     </div>

@@ -8,8 +8,18 @@ export default async function handler(
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const rpcTarget = process.env.RPC_PROXY_TARGET || 'http://130.61.22.253:8545';
+
+  if (!rpcTarget) {
+    return res.status(500).json({
+      jsonrpc: '2.0',
+      error: { code: -32603, message: 'RPC_PROXY_TARGET not configured' },
+      id: null
+    });
+  }
+
   try {
-    const response = await fetch('http://152.70.182.220:8545', {
+    const response = await fetch(rpcTarget, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

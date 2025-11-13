@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { publicClient } from '@/lib/viem'
+import { parseAbi } from 'viem'
 import type { Address } from 'viem'
+
+const VALIDATOR_CONTRACT = '0x0000000000000000000000000000000000009999' as Address
+const VALIDATOR_ABI = parseAbi(['function getValidators() view returns (address[])'])
 
 export interface ValidatorMetrics {
   address: Address
@@ -97,15 +101,49 @@ export function useValidatorMetrics(blockCount: number = 100) {
           blockTimeVariance = Math.sqrt(variance)
         }
 
+        // Fetch all validators from the contract
+        let contractValidators: Address[] = []
+        try {
+          contractValidators = await publicClient.readContract({
+            address: VALIDATOR_CONTRACT,
+            abi: VALIDATOR_ABI,
+            functionName: 'getValidators',
+          }) as Address[]
+        } catch (error) {
+          console.warn('Failed to fetch validators from contract, using block data only:', error)
+        }
+
         // Calculate uptime and active status
         const now = Math.floor(Date.now() / 1000)
-        const validators: ValidatorMetrics[] = Array.from(validatorMap.entries()).map(([address, data]) => {
+
+        // Create a set of all validator addresses (from contract + from blocks)
+        const allValidatorAddresses = new Set<Address>([
+          ...contractValidators,
+          ...Array.from(validatorMap.keys())
+        ])
+
+        const validators: ValidatorMetrics[] = Array.from(allValidatorAddresses).map((address) => {
+          const data = validatorMap.get(address)
+
+          if (!data) {
+            // Validator exists in contract but hasn't produced any blocks
+            return {
+              address,
+              blocksProduced: 0,
+              lastBlockNumber: 0n,
+              lastBlockTime: 0n,
+              isActive: false,
+              uptime: 0,
+            }
+          }
+
           const timeSinceLastBlock = now - Number(data.lastBlockTime)
           const isActive = timeSinceLastBlock < 60 // Active if produced block in last minute
 
           // Uptime calculation: blocks produced / expected blocks
-          // In QBFT with 4 validators, each should produce ~25% of blocks
-          const expectedBlocks = blockCount / 4
+          // Expected blocks = total blocks / number of active validators
+          const activeValidatorCount = contractValidators.length || 4 // Fallback to 4 if contract query fails
+          const expectedBlocks = blockCount / activeValidatorCount
           const uptime = Math.min(100, (data.blocksProduced / expectedBlocks) * 100)
 
           return {

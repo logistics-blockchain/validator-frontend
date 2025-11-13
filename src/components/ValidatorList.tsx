@@ -13,6 +13,8 @@ interface ValidatorListProps {
 
 export function ValidatorList({ validators, loading, onViewAddress }: ValidatorListProps) {
   const formatTimeAgo = (timestamp: bigint) => {
+    if (timestamp === 0n) return '-'
+
     const now = Math.floor(Date.now() / 1000)
     const diff = now - Number(timestamp)
 
@@ -23,6 +25,7 @@ export function ValidatorList({ validators, loading, onViewAddress }: ValidatorL
   }
 
   const getUptimeColor = (uptime: number) => {
+    if (uptime === 0) return 'text-gray-400'
     if (uptime >= 95) return 'text-green-600'
     if (uptime >= 80) return 'text-yellow-600'
     return 'text-red-600'

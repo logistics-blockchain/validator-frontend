@@ -116,19 +116,25 @@ export function useValidatorMetrics(blockCount: number = 100) {
         // Calculate uptime and active status
         const now = Math.floor(Date.now() / 1000)
 
-        // Create a set of all validator addresses (from contract + from blocks)
-        const allValidatorAddresses = new Set<Address>([
-          ...contractValidators,
-          ...Array.from(validatorMap.keys())
+        // Normalize validatorMap to lowercase keys for case-insensitive lookup
+        const normalizedValidatorMap = new Map<string, typeof validatorMap extends Map<any, infer V> ? V : never>()
+        validatorMap.forEach((value, key) => {
+          normalizedValidatorMap.set(key.toLowerCase(), value)
+        })
+
+        // Create a set of all validator addresses (normalized to lowercase to avoid duplicates)
+        const allValidatorAddressesLower = new Set<string>([
+          ...contractValidators.map(addr => addr.toLowerCase()),
+          ...Array.from(normalizedValidatorMap.keys())
         ])
 
-        const validators: ValidatorMetrics[] = Array.from(allValidatorAddresses).map((address) => {
-          const data = validatorMap.get(address)
+        const validators: ValidatorMetrics[] = Array.from(allValidatorAddressesLower).map((addressLower) => {
+          const data = normalizedValidatorMap.get(addressLower)
 
           if (!data) {
             // Validator exists in contract but hasn't produced any blocks
             return {
-              address,
+              address: addressLower as Address,
               blocksProduced: 0,
               lastBlockNumber: 0n,
               lastBlockTime: 0n,
@@ -147,7 +153,7 @@ export function useValidatorMetrics(blockCount: number = 100) {
           const uptime = Math.min(100, (data.blocksProduced / expectedBlocks) * 100)
 
           return {
-            address,
+            address: addressLower as Address,
             blocksProduced: data.blocksProduced,
             lastBlockNumber: data.lastBlockNumber,
             lastBlockTime: data.lastBlockTime,

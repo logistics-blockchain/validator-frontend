@@ -1,18 +1,19 @@
 # Validator Frontend
 
-Development UI for blockchain logistics management. Supports Besu and Hardhat networks.
+Development UI and blockchain indexer for logistics management. Supports Besu and Hardhat networks.
 
-## Features
+## Structure
 
-- Multi-network support with network selector
-- Account management with balance tracking
-- Contract discovery and UUPS proxy detection
-- Dynamic function forms for contract interaction
-- Block explorer with transaction/address views
-- Validator monitoring and network health
-- Real-time block updates
+```
+├── src/           # React frontend
+├── indexer/       # Blockchain indexer (Node.js)
+├── public/        # Static assets & config
+└── api/           # Vercel API routes
+```
 
 ## Quick Start
+
+### Frontend
 
 ```bash
 npm install
@@ -20,6 +21,16 @@ npm run dev
 ```
 
 Open http://localhost:3000
+
+### Indexer
+
+```bash
+cd indexer
+npm install
+npm run dev
+```
+
+API runs on http://localhost:3001
 
 ## Configuration
 
@@ -40,26 +51,23 @@ Edit `public/networks.config.json`:
 }
 ```
 
-### Accounts
+### Environment
 
-Create `.env`:
-
+Frontend `.env`:
 ```env
 VITE_PRIVATE_KEYS=key1,key2,key3
 VITE_DEFAULT_NETWORK=besu-local
 ```
 
+Indexer `.env`:
+```env
+RPC_URL=http://127.0.0.1:8545
+DATABASE_PATH=./data/indexer.db
+PORT=3001
+```
+
 ## Tech Stack
 
-- Vite + React + TypeScript
-- Viem (Ethereum library)
-- Zustand (State management)
-- Tailwind CSS
+**Frontend**: Vite, React, TypeScript, Viem, Zustand, Tailwind CSS
 
-## Scripts
-
-```bash
-npm run dev      # Development server
-npm run build    # Production build
-npm run preview  # Preview build
-```
+**Indexer**: Node.js, Express, SQLite, Viem

@@ -1,0 +1,25 @@
+services:
+  indexer:
+    build: .
+    container_name: blockchain-indexer
+    ports:
+      - "3001:3001"
+    environment:
+      - RPC_URL=${RPC_URL:-http://host.docker.internal:8545}
+      - PORT=3001
+      - DB_PATH=/app/data/indexer.db
+      - POLL_INTERVAL_MS=5000
+      - RATE_LIMIT_MAX=100
+      - CORS_ORIGINS=http://localhost:5173,https://validator-frontend.vercel.app
+    volumes:
+      - indexer-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  indexer-data:

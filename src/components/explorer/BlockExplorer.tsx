@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useBlockHistory } from '@/hooks/useBlockHistory'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { formatAddress } from '@/lib/utils'
-import { ChevronRight, RefreshCw, Search } from 'lucide-react'
+import { ChevronRight, RefreshCw, Search, Database } from 'lucide-react'
+import { indexerService } from '@/services/indexerService'
 import type { Hash, Address } from 'viem'
 
 interface BlockExplorerProps {
@@ -12,11 +13,45 @@ interface BlockExplorerProps {
   onViewAddress?: (address: Address) => void
 }
 
+interface SyncStatus {
+  status: 'syncing' | 'realtime' | 'offline'
+  lastIndexedBlock: number
+  chainHead: number | null
+  percentage: number | null
+}
+
 export function BlockExplorer({ onViewBlock, onViewTransaction, onViewAddress }: BlockExplorerProps) {
   const [blockCount, setBlockCount] = useState(20)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const { blocks, loading, refresh } = useBlockHistory(blockCount)
+
+  useEffect(() => {
+    const fetchSyncStatus = async () => {
+      try {
+        const [stats, health] = await Promise.all([
+          indexerService.getStats(),
+          indexerService.getHealth()
+        ])
+        const chainHead = blocks.length > 0 ? Number(blocks[0].number) : null
+        const percentage = chainHead && stats.lastIndexedBlock > 0
+          ? Math.min(100, (stats.lastIndexedBlock / chainHead) * 100)
+          : null
+        setSyncStatus({
+          status: stats.syncStatus === 'realtime' ? 'realtime' : 'syncing',
+          lastIndexedBlock: stats.lastIndexedBlock,
+          chainHead,
+          percentage
+        })
+      } catch {
+        setSyncStatus({ status: 'offline', lastIndexedBlock: 0, chainHead: null, percentage: null })
+      }
+    }
+    fetchSyncStatus()
+    const interval = setInterval(fetchSyncStatus, 5000)
+    return () => clearInterval(interval)
+  }, [blocks])
 
   const formatTimestamp = (timestamp: bigint) => {
     const date = new Date(Number(timestamp) * 1000)
@@ -123,6 +158,53 @@ export function BlockExplorer({ onViewBlock, onViewTransaction, onViewAddress }:
           </div>
         </CardContent>
       </Card>
+
+      {/* Indexer Sync Status */}
+      {syncStatus && (
+        <Card className={`shadow-md ${
+          syncStatus.status === 'realtime' ? 'bg-green-50 border-green-200' :
+          syncStatus.status === 'syncing' ? 'bg-yellow-50 border-yellow-200' :
+          'bg-red-50 border-red-200'
+        }`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Database className={`h-5 w-5 ${
+                  syncStatus.status === 'realtime' ? 'text-green-600' :
+                  syncStatus.status === 'syncing' ? 'text-yellow-600' :
+                  'text-red-600'
+                }`} />
+                <div>
+                  <div className="font-medium text-sm">
+                    {syncStatus.status === 'realtime' && 'Indexer: Synced'}
+                    {syncStatus.status === 'syncing' && 'Indexer: Syncing'}
+                    {syncStatus.status === 'offline' && 'Indexer: Offline'}
+                  </div>
+                  {syncStatus.status === 'syncing' && syncStatus.chainHead && (
+                    <div className="text-xs text-gray-600">
+                      Block {syncStatus.lastIndexedBlock.toLocaleString()} / {syncStatus.chainHead.toLocaleString()}
+                      {syncStatus.percentage !== null && ` (${syncStatus.percentage.toFixed(1)}%)`}
+                    </div>
+                  )}
+                  {syncStatus.status === 'realtime' && (
+                    <div className="text-xs text-gray-600">
+                      Latest indexed: {syncStatus.lastIndexedBlock.toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {syncStatus.status === 'syncing' && syncStatus.percentage !== null && (
+                <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-yellow-500 transition-all duration-500"
+                    style={{ width: `${syncStatus.percentage}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Block List */}
       <Card className="bg-white shadow-md">

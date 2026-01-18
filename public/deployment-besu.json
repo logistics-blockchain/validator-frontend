@@ -1,0 +1,13 @@
+{
+  "network": "besu-local",
+  "chainId": 10001,
+  "deployer": "0x415Dd919Df8f7702ab2F95D7f07eF57D63E92B55",
+  "contracts": {
+    "ManufacturerRegistry": "0x815c58aaec1abb7798d6a4474597fa3bcfd359bd",
+    "LogisticsOrderImplementationV1": "0xaec3e0ea11f6a195b8b5e1a7b43f6140c01f9125",
+    "LogisticsOrderImplementationV2": "0x050a96b4deba9f4739d09dad05cc5c235bd84653",
+    "LogisticsOrderProxy": "0x9662901c858c16541fa99eb8a11740b608e8e8ba"
+  },
+  "version": "1.0.0",
+  "timestamp": "2025-10-29T13:46:49.346Z"
+}

@@ -1,0 +1,13 @@
+{
+  "networks": [
+    {
+      "id": "besu-cloud",
+      "name": "Besu Cloud",
+      "chainId": 10002,
+      "rpcUrl": "/api/rpc",
+      "description": "Cloud-hosted Besu network",
+      "enabled": true
+    }
+  ],
+  "defaultNetwork": "besu-cloud"
+}

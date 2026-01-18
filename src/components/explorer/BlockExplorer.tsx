@@ -167,40 +167,42 @@ export function BlockExplorer({ onViewBlock, onViewTransaction, onViewAddress }:
           'bg-red-50 border-red-200'
         }`}>
           <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Database className={`h-5 w-5 ${
-                  syncStatus.status === 'realtime' ? 'text-green-600' :
-                  syncStatus.status === 'syncing' ? 'text-yellow-600' :
-                  'text-red-600'
-                }`} />
-                <div>
-                  <div className="font-medium text-sm">
-                    {syncStatus.status === 'realtime' && 'Indexer: Synced'}
-                    {syncStatus.status === 'syncing' && 'Indexer: Syncing'}
-                    {syncStatus.status === 'offline' && 'Indexer: Offline'}
+            <div className="flex items-center gap-3">
+              <Database className={`h-5 w-5 flex-shrink-0 ${
+                syncStatus.status === 'realtime' ? 'text-green-600' :
+                syncStatus.status === 'syncing' ? 'text-yellow-600' :
+                'text-red-600'
+              }`} />
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-medium text-sm">
+                  {syncStatus.status === 'realtime' && 'Indexer: Synced'}
+                  {syncStatus.status === 'syncing' && 'Indexer: Syncing'}
+                  {syncStatus.status === 'offline' && 'Indexer: Offline'}
+                </span>
+                {syncStatus.status === 'syncing' && syncStatus.percentage !== null && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-yellow-500 transition-all duration-500"
+                        style={{ width: `${syncStatus.percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-600">
+                      {syncStatus.percentage.toFixed(1)}%
+                    </span>
                   </div>
-                  {syncStatus.status === 'syncing' && syncStatus.chainHead && (
-                    <div className="text-xs text-gray-600">
-                      Block {syncStatus.lastIndexedBlock.toLocaleString()} / {syncStatus.chainHead.toLocaleString()}
-                      {syncStatus.percentage !== null && ` (${syncStatus.percentage.toFixed(1)}%)`}
-                    </div>
-                  )}
-                  {syncStatus.status === 'realtime' && (
-                    <div className="text-xs text-gray-600">
-                      Latest indexed: {syncStatus.lastIndexedBlock.toLocaleString()}
-                    </div>
-                  )}
-                </div>
+                )}
+                {syncStatus.status === 'syncing' && syncStatus.chainHead && (
+                  <span className="text-xs text-gray-600">
+                    ({syncStatus.lastIndexedBlock.toLocaleString()} / {syncStatus.chainHead.toLocaleString()})
+                  </span>
+                )}
+                {syncStatus.status === 'realtime' && (
+                  <span className="text-xs text-gray-600">
+                    Block {syncStatus.lastIndexedBlock.toLocaleString()}
+                  </span>
+                )}
               </div>
-              {syncStatus.status === 'syncing' && syncStatus.percentage !== null && (
-                <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-yellow-500 transition-all duration-500"
-                    style={{ width: `${syncStatus.percentage}%` }}
-                  />
-                </div>
-              )}
             </div>
           </CardContent>
         </Card>

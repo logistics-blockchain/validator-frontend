@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { publicClient } from '@/lib/viem'
+import { indexerService } from '@/services/indexerService'
 import { useBlockchainStore } from '@/store/blockchainStore'
 import type { BlockInfo, TransactionInfo, TransactionReceipt } from '@/types/explorer'
 import type { Hash } from 'viem'
 
 /**
- * Hook to fetch and manage block history
+ * Hook to fetch and manage block history using the indexer API
  */
 export function useBlockHistory(count: number = 20) {
   const [blocks, setBlocks] = useState<BlockInfo[]>([])
@@ -35,7 +36,7 @@ export function useBlockHistory(count: number = 20) {
       return
     }
 
-    // Add only the new block incrementally
+    // Add only the new block incrementally (use RPC for real-time updates)
     addNewBlock(blockNum)
   }, [currentBlock])
 
@@ -66,46 +67,26 @@ export function useBlockHistory(count: number = 20) {
   const loadBlocks = async () => {
     setLoading(true)
     try {
-      // Get latest block number (currentBlock is a Block object, not a bigint)
-      let latestBlockNumber: bigint
-      if (!currentBlock) {
-        console.log('[BlockExplorer] Fetching latest block number...')
-        latestBlockNumber = await publicClient.getBlockNumber()
-        console.log('[BlockExplorer] Latest block:', latestBlockNumber)
-      } else {
-        // Extract block number from Block object
-        latestBlockNumber = currentBlock.number
-        console.log('[BlockExplorer] Using currentBlock number:', latestBlockNumber)
-      }
+      console.log('[BlockExplorer] Loading blocks from indexer...')
 
-      const blockNumbers: bigint[] = []
-      // Start from block 1 (skip genesis block 0) or calculate based on count
-      const start = latestBlockNumber > BigInt(count - 1) ? latestBlockNumber - BigInt(count - 1) : 1n
+      const { blocks: indexedBlocks } = await indexerService.getBlocks(count, 0)
 
-      for (let i = latestBlockNumber; i >= start && i >= 1n; i--) {
-        blockNumbers.push(i)
-      }
+      const loadedBlocks: BlockInfo[] = indexedBlocks.map((block) => ({
+        number: BigInt(block.number),
+        hash: block.hash,
+        parentHash: block.parentHash,
+        timestamp: BigInt(block.timestamp),
+        miner: block.miner,
+        transactionCount: block.transactionCount,
+        size: BigInt(block.size),
+        transactions: [], // Not included in batch response
+      }))
 
-      console.log('[BlockExplorer] Initial load: Fetching blocks from', start, 'to', latestBlockNumber, '- total:', blockNumbers.length)
-
-      const blockPromises = blockNumbers.map(async (num) => {
-        const block = await publicClient.getBlock({ blockNumber: num })
-        return {
-          number: block.number!,
-          hash: block.hash!,
-          parentHash: block.parentHash,
-          timestamp: block.timestamp,
-          miner: block.miner!,
-          transactionCount: block.transactions.length,
-          size: block.size,
-          transactions: block.transactions as Hash[],
-        } as BlockInfo
-      })
-
-      const loadedBlocks = await Promise.all(blockPromises)
-      console.log('[BlockExplorer] Initial load complete:', loadedBlocks.length, 'blocks')
+      console.log('[BlockExplorer] Loaded', loadedBlocks.length, 'blocks from indexer')
       setBlocks(loadedBlocks)
-      setLastBlockNumber(latestBlockNumber)
+      if (loadedBlocks.length > 0) {
+        setLastBlockNumber(loadedBlocks[0].number)
+      }
     } catch (error) {
       console.error('[BlockExplorer] Error loading blocks:', error)
       setBlocks([])
@@ -118,7 +99,7 @@ export function useBlockHistory(count: number = 20) {
 }
 
 /**
- * Hook to fetch a single block by number
+ * Hook to fetch a single block by number using indexer API
  */
 export function useBlock(blockNumber: bigint | null) {
   const [block, setBlock] = useState<BlockInfo | null>(null)
@@ -130,17 +111,33 @@ export function useBlock(blockNumber: bigint | null) {
     const loadBlock = async () => {
       setLoading(true)
       try {
-        const blockData = await publicClient.getBlock({ blockNumber })
-        setBlock({
-          number: blockData.number!,
-          hash: blockData.hash!,
-          parentHash: blockData.parentHash,
-          timestamp: blockData.timestamp,
-          miner: blockData.miner!,
-          transactionCount: blockData.transactions.length,
-          size: blockData.size,
-          transactions: blockData.transactions as Hash[],
-        })
+        const indexedBlock = await indexerService.getBlock(Number(blockNumber))
+
+        if (indexedBlock) {
+          setBlock({
+            number: BigInt(indexedBlock.number),
+            hash: indexedBlock.hash,
+            parentHash: indexedBlock.parentHash,
+            timestamp: BigInt(indexedBlock.timestamp),
+            miner: indexedBlock.miner,
+            transactionCount: indexedBlock.transactionCount,
+            size: BigInt(indexedBlock.size),
+            transactions: [],
+          })
+        } else {
+          // Fallback to RPC if block not in indexer yet
+          const blockData = await publicClient.getBlock({ blockNumber })
+          setBlock({
+            number: blockData.number!,
+            hash: blockData.hash!,
+            parentHash: blockData.parentHash,
+            timestamp: blockData.timestamp,
+            miner: blockData.miner!,
+            transactionCount: blockData.transactions.length,
+            size: blockData.size,
+            transactions: blockData.transactions as Hash[],
+          })
+        }
       } catch (error) {
         console.error('Error loading block:', error)
         setBlock(null)
@@ -156,7 +153,7 @@ export function useBlock(blockNumber: bigint | null) {
 }
 
 /**
- * Hook to fetch transaction details
+ * Hook to fetch transaction details using indexer API
  */
 export function useTransaction(txHash: Hash | null) {
   const [transaction, setTransaction] = useState<TransactionInfo | null>(null)
@@ -169,42 +166,82 @@ export function useTransaction(txHash: Hash | null) {
     const loadTransaction = async () => {
       setLoading(true)
       try {
-        const [tx, rcpt] = await Promise.all([
-          publicClient.getTransaction({ hash: txHash }),
-          publicClient.getTransactionReceipt({ hash: txHash }).catch(() => null),
-        ])
+        const result = await indexerService.getTransaction(txHash)
 
-        setTransaction({
-          hash: tx.hash,
-          blockNumber: tx.blockNumber!,
-          blockHash: tx.blockHash!,
-          from: tx.from,
-          to: tx.to,
-          value: tx.value,
-          input: tx.input,
-          nonce: tx.nonce,
-          transactionIndex: tx.transactionIndex!,
-          status: rcpt?.status === 'success' ? 'success' : 'reverted',
-        })
+        if (result) {
+          const { transaction: tx, events } = result
 
-        if (rcpt) {
+          setTransaction({
+            hash: tx.hash,
+            blockNumber: BigInt(tx.blockNumber),
+            blockHash: tx.blockHash,
+            from: tx.fromAddress,
+            to: tx.toAddress,
+            value: BigInt(tx.value),
+            input: tx.input,
+            nonce: tx.nonce,
+            transactionIndex: tx.txIndex,
+            status: tx.status,
+          })
+
           setReceipt({
-            transactionHash: rcpt.transactionHash,
-            blockNumber: rcpt.blockNumber,
-            blockHash: rcpt.blockHash,
-            from: rcpt.from,
-            to: rcpt.to,
-            contractAddress: rcpt.contractAddress,
-            status: rcpt.status,
-            logs: rcpt.logs.map((log) => ({
-              address: log.address,
-              topics: log.topics,
-              data: log.data,
-              logIndex: log.logIndex!,
-              transactionHash: log.transactionHash!,
-              blockNumber: log.blockNumber!,
+            transactionHash: tx.hash,
+            blockNumber: BigInt(tx.blockNumber),
+            blockHash: tx.blockHash,
+            from: tx.fromAddress,
+            to: tx.toAddress,
+            contractAddress: tx.contractCreated,
+            status: tx.status,
+            logs: events.map((event) => ({
+              address: event.address,
+              topics: [event.topic0, event.topic1, event.topic2, event.topic3].filter(
+                (t): t is Hash => t !== null
+              ),
+              data: event.data,
+              logIndex: event.logIndex,
+              transactionHash: event.txHash,
+              blockNumber: BigInt(event.blockNumber),
             })),
           })
+        } else {
+          // Fallback to RPC if not indexed yet
+          const [tx, rcpt] = await Promise.all([
+            publicClient.getTransaction({ hash: txHash }),
+            publicClient.getTransactionReceipt({ hash: txHash }).catch(() => null),
+          ])
+
+          setTransaction({
+            hash: tx.hash,
+            blockNumber: tx.blockNumber!,
+            blockHash: tx.blockHash!,
+            from: tx.from,
+            to: tx.to,
+            value: tx.value,
+            input: tx.input,
+            nonce: tx.nonce,
+            transactionIndex: tx.transactionIndex!,
+            status: rcpt?.status === 'success' ? 'success' : 'reverted',
+          })
+
+          if (rcpt) {
+            setReceipt({
+              transactionHash: rcpt.transactionHash,
+              blockNumber: rcpt.blockNumber,
+              blockHash: rcpt.blockHash,
+              from: rcpt.from,
+              to: rcpt.to,
+              contractAddress: rcpt.contractAddress,
+              status: rcpt.status,
+              logs: rcpt.logs.map((log) => ({
+                address: log.address,
+                topics: log.topics,
+                data: log.data,
+                logIndex: log.logIndex!,
+                transactionHash: log.transactionHash!,
+                blockNumber: log.blockNumber!,
+              })),
+            })
+          }
         }
       } catch (error) {
         console.error('Error loading transaction:', error)

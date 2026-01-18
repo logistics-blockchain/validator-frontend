@@ -9,13 +9,16 @@ import { ManufacturerProxyPanel } from './components/ManufacturerProxyPanel'
 import { ExplorerView } from './components/ExplorerView'
 import { ValidatorView } from './components/ValidatorView'
 import { NetworkSelector } from './components/NetworkSelector'
+import { NetworkInfoDialog } from './components/NetworkInfoDialog'
+import { BridgeView } from './components/BridgeView'
+import { AIModelsView } from './components/AIModelsView'
 import { useWatchBlocks } from './hooks/useWatchBlocks'
 import { useAccountBalance } from './hooks/useAccountBalance'
 import { useContracts } from './hooks/useContracts'
 import { useFactoryActions } from './hooks/useFactoryActions'
 import { useFactoryEvents } from './hooks/useFactoryEvents'
 import { Button } from './components/ui/Button'
-import { RefreshCw, Home, Search, Shield } from 'lucide-react'
+import { RefreshCw, Home, Search, Shield, Database, ArrowLeftRight, Brain } from 'lucide-react'
 import type { Hash, Address } from 'viem'
 import { createContext, useContext } from 'react'
 
@@ -33,7 +36,7 @@ export function useNavigation() {
   return context
 }
 
-type AppView = 'dashboard' | 'explorer' | 'validators'
+type AppView = 'dashboard' | 'explorer' | 'validators' | 'bridge' | 'aimodels'
 
 export interface ExplorerInitialView {
   address?: Address
@@ -44,6 +47,7 @@ export interface ExplorerInitialView {
 function App() {
   const [currentView, setCurrentView] = useState<AppView>('dashboard')
   const [explorerInitialView, setExplorerInitialView] = useState<ExplorerInitialView | undefined>()
+  const [showNetworkInfo, setShowNetworkInfo] = useState(false)
 
   // Initialize blockchain monitoring
   useWatchBlocks()
@@ -108,10 +112,38 @@ function App() {
                   <Search className="h-4 w-4" />
                   Block Explorer
                 </Button>
+                <Button
+                  onClick={() => setCurrentView('bridge')}
+                  variant={currentView === 'bridge' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <ArrowLeftRight className="h-4 w-4" />
+                  Bridge
+                </Button>
+                <Button
+                  onClick={() => setCurrentView('aimodels')}
+                  variant={currentView === 'aimodels' ? 'default' : 'ghost'}
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Brain className="h-4 w-4" />
+                  AI Models
+                </Button>
               </nav>
             </div>
 
             <div className="flex items-center gap-2">
+              <Button
+                onClick={() => setShowNetworkInfo(true)}
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-white border-gray-300 hover:bg-gray-50"
+                title="View network configuration and genesis"
+              >
+                <Database className="h-4 w-4" />
+                Network Info
+              </Button>
               <NetworkSelector />
               <Button
                 onClick={handleRefresh}
@@ -154,6 +186,12 @@ function App() {
         ) : currentView === 'validators' ? (
           /* Validators View */
           <ValidatorView />
+        ) : currentView === 'bridge' ? (
+          /* Bridge View */
+          <BridgeView />
+        ) : currentView === 'aimodels' ? (
+          /* AI Models View */
+          <AIModelsView />
         ) : (
           /* Block Explorer View */
           <ExplorerView initialView={explorerInitialView} />
@@ -164,6 +202,9 @@ function App() {
         <div className="container mx-auto px-4 py-6 text-center text-gray-600 text-sm">
         </div>
       </footer>
+
+      {/* Network Info Dialog */}
+      <NetworkInfoDialog isOpen={showNetworkInfo} onClose={() => setShowNetworkInfo(false)} />
     </div>
     </NavigationContext.Provider>
   )

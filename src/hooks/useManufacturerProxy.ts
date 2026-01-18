@@ -14,6 +14,7 @@ export function useManufacturerProxy() {
   const [proxyAddress, setProxyAddress] = useState<Address | null>(null)
   const [isManufacturer, setIsManufacturer] = useState(false)
   const [orderCount, setOrderCount] = useState(0n)
+  const [manufacturerName, setManufacturerName] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (deploymentPattern !== 'factory' || !currentAccount) {
@@ -21,6 +22,7 @@ export function useManufacturerProxy() {
       setProxyAddress(null)
       setIsManufacturer(false)
       setOrderCount(0n)
+      setManufacturerName(undefined)
       return
     }
 
@@ -40,6 +42,7 @@ export function useManufacturerProxy() {
 
     if (manufacturerProxy) {
       setIsManufacturer(true)
+      setManufacturerName(manufacturerProxy.manufacturerName)
 
       const hasDeployedProxy = manufacturerProxy.proxyAddress !== '0x0000000000000000000000000000000000000000'
       setHasProxy(hasDeployedProxy)
@@ -50,6 +53,7 @@ export function useManufacturerProxy() {
       setHasProxy(false)
       setProxyAddress(null)
       setOrderCount(0n)
+      setManufacturerName(undefined)
     }
   }, [currentAccount, deploymentPattern, manufacturerProxies])
 
@@ -58,5 +62,6 @@ export function useManufacturerProxy() {
     proxyAddress,
     isManufacturer,
     orderCount,
+    manufacturerName,
   }
 }

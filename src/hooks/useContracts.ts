@@ -28,7 +28,10 @@ export function useContracts() {
         // 1. ALWAYS load validator contract first (genesis contract at 0x9999)
         await addValidatorContract(contracts)
 
-        // 2. Try to detect and load deployment pattern contracts
+        // 2. Load MLModelRegistry if deployed
+        await addMLModelRegistryContract(contracts)
+
+        // 3. Try to detect and load deployment pattern contracts
         try {
           const { pattern, deploymentInfo } = await detectDeploymentPattern()
           setDeploymentPattern(pattern)
@@ -231,6 +234,42 @@ export function useContracts() {
         }
       } catch (error) {
         console.error('Error loading validator contract:', error)
+      }
+    }
+
+    // Add MLModelRegistry contract if deployed
+    async function addMLModelRegistryContract(contracts: DeployedContract[]) {
+      try {
+        // Load deployment info to get address
+        const deploymentResponse = await fetch('/deployment-mlregistry.json')
+        if (!deploymentResponse.ok) {
+          console.log('MLModelRegistry not deployed (no deployment file)')
+          return
+        }
+        const deploymentData = await deploymentResponse.json()
+        const address = deploymentData.contracts?.MLModelRegistry as Address
+        if (!address) {
+          console.log('MLModelRegistry address not found in deployment')
+          return
+        }
+
+        // Load ABI
+        const abiResponse = await fetch('/artifacts/MLModelRegistry.json')
+        if (!abiResponse.ok) {
+          console.log('MLModelRegistry ABI not found')
+          return
+        }
+        const artifact = await abiResponse.json()
+
+        contracts.push({
+          name: 'ML Model Registry',
+          address,
+          abi: artifact.abi as Abi,
+          isProxy: false,
+        })
+        console.log('✅ Added ML Model Registry contract at', address)
+      } catch (error) {
+        console.error('Error loading MLModelRegistry contract:', error)
       }
     }
 

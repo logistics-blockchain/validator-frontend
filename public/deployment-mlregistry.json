@@ -1,0 +1,29 @@
+{
+  "network": "besu-cloud",
+  "chainId": 10002,
+  "rpcUrl": "http://130.61.22.253:8545",
+  "deployer": "0xa5D07a52f8f290Fe82657Ce306fF4CB07C5B4597",
+  "contracts": {
+    "MLModelRegistry": "0x0da2be2b1f488d80957e817398e2e4b75c20a755"
+  },
+  "transactionHash": "0xdc4f33ed82ef03be0849fa55a2a9f370f81b46c4d67f3c7bacd173b0629db4d6",
+  "blockNumber": "483520",
+  "timestamp": "2025-12-16T09:40:54.482Z",
+  "notes": {
+    "description": "ML Model Registry with ERC721 NFT for model ownership and lineage tracking",
+    "features": [
+      "Register base models (mints NFT)",
+      "Register training runs (creates child model NFT)",
+      "Track model lineage (parent-child relationships)",
+      "Store training metrics and dataset references",
+      "Query models and runs by batch"
+    ],
+    "keyFunctions": [
+      "registerBaseModel(name, hash, metadata) - anyone can create",
+      "registerTrainingRun(inputId, ...) - only model owner",
+      "getModel(id) - view model details",
+      "getModelLineage(id) - get ancestry chain",
+      "getTrainingRunsByInput(id) - get all runs using model as input"
+    ]
+  }
+}

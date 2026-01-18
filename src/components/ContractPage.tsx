@@ -2,13 +2,15 @@ import React, { useState } from 'react'
 import { useAddressData } from '@/hooks/useAddressData'
 import { useAddressTransactions } from '@/hooks/useAddressTransactions'
 import { useAddressEvents } from '@/hooks/useAddressEvents'
+import { useTransactionExport } from '@/hooks/useTransactionExport'
+import { useEventExport } from '@/hooks/useEventExport'
 import { useContractStore } from '@/store/contractStore'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card'
 import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
 import { FunctionForm } from './FunctionForm'
 import { TransactionList } from './TransactionList'
-import { ArrowLeft, Copy, ExternalLink } from 'lucide-react'
+import { ArrowLeft, Copy, ExternalLink, Download } from 'lucide-react'
 import { decodeEventLog } from 'viem'
 import type { Address, Hash } from 'viem'
 import type { ContractFunction } from '@/types/contracts'
@@ -34,6 +36,8 @@ export function ContractPage({
   const { transactions, loading: txLoading } = useAddressTransactions(address)
   const { events, loading: eventsLoading } = useAddressEvents(address)
   const { contracts } = useContractStore()
+  const { exportTransactions, isExporting } = useTransactionExport()
+  const { exportEvents } = useEventExport()
   const [activeTab, setActiveTab] = useState<TabType>('read')
   const [openFunctions, setOpenFunctions] = useState<Record<string, boolean>>({})
 
@@ -304,7 +308,18 @@ export function ContractPage({
               ) : events.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">No events found</div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="flex justify-end mb-4">
+                    <Button
+                      onClick={() => exportEvents(events, address, contract.abi)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Export CSV
+                    </Button>
+                  </div>
+                  <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
@@ -354,19 +369,35 @@ export function ContractPage({
                       })}
                     </tbody>
                   </table>
-                </div>
+                  </div>
+                </>
               )}
             </div>
           )}
 
           {/* Transactions Tab */}
           {activeTab === 'transactions' && (
-            <TransactionList
+            <>
+              {transactions.length > 0 && (
+                <div className="flex justify-end mb-4">
+                  <Button
+                    onClick={() => exportTransactions(transactions, address)}
+                    variant="outline"
+                    size="sm"
+                    disabled={isExporting}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </div>
+              )}
+              <TransactionList
               transactions={transactions}
               loading={txLoading}
               onViewTransaction={onViewTransaction}
               onViewAddress={onViewAddress}
-            />
+              />
+            </>
           )}
 
           {/* Code Tab */}

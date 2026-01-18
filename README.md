@@ -15,9 +15,53 @@ A flexible, TypeScript-based development UI for blockchain logistics management 
 - **Block Explorer**: Search blocks, transactions, and addresses
 - **Type-safe**: Full TypeScript support with Viem's type inference
 
+## Connecting to Your Custom Besu Chain
+
+### Cloud-Hosted Frontend (Vercel)
+
+The Vercel-hosted frontend can connect to **publicly accessible HTTPS** Besu nodes:
+
+1. Click the **Network Selector** in the top-right corner
+2. Click **"Add Custom Network"**
+3. Enter your node details:
+   - Network name (e.g., "My Besu Chain")
+   - RPC URL (**must be HTTPS**, e.g., `https://your-node.example.com:8545`)
+   - Chain ID (from your genesis file)
+
+**Important**: HTTP URLs will NOT work from the cloud frontend (browsers block mixed content).
+
+**For local nodes**, expose them with Cloudflare Tunnel (free):
+```bash
+# Install cloudflared
+brew install cloudflare/cloudflare/cloudflared  # macOS
+# or: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+
+# Expose your Besu node
+cloudflared tunnel --url http://localhost:8545
+# Output: https://random-words-12345.trycloudflare.com
+# Use this HTTPS URL in the custom network dialog
+```
+
+Custom networks are stored in your browser's localStorage.
+
+**Recommended**: For regular development, run the frontend locally instead (see below).
+
+### Run Frontend Locally
+
+For direct localhost access without exposing your node:
+
+```bash
+git clone <repository>
+cd validator-frontend
+npm install
+npm run dev
+```
+
+Then add your local node as a custom network using `http://127.0.0.1:8545`.
+
 ## Quick Start
 
-### For Local Besu Networks
+### For Local Besu Networks (Run Frontend Locally)
 
 1. **Configure your network** - Edit `public/networks.config.json`:
    ```json

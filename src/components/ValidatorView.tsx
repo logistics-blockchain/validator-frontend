@@ -13,7 +13,7 @@ interface ValidatorViewProps {
 }
 
 export function ValidatorView({ onViewAddress, onViewBlock }: ValidatorViewProps) {
-  const [blockCount] = useState(100) // Monitor last 100 blocks
+  const [blockCount] = useState(1000) // Monitor last 1000 blocks
   const { stats, loading: metricsLoading } = useValidatorMetrics(blockCount)
   const { health, loading: healthLoading } = useNetworkHealth()
 

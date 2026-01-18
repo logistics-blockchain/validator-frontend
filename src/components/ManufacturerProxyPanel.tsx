@@ -4,18 +4,20 @@ import { useContractStore } from '@/store/contractStore'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
+import { ExportFiltersDialog } from './ExportFiltersDialog'
 import { formatAddress } from '@/lib/utils'
-import { Factory, CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Factory, CheckCircle2, XCircle, AlertCircle, Loader2, Download } from 'lucide-react'
 
 interface ManufacturerProxyPanelProps {
   onDeployProxy?: () => Promise<void>
 }
 
 export function ManufacturerProxyPanel({ onDeployProxy }: ManufacturerProxyPanelProps) {
-  const { hasProxy, proxyAddress, isManufacturer, orderCount } = useManufacturerProxy()
+  const { hasProxy, proxyAddress, isManufacturer, orderCount, manufacturerName } = useManufacturerProxy()
   const { deploymentPattern, selectManufacturerProxy } = useContractStore()
   const [deploying, setDeploying] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showExportDialog, setShowExportDialog] = useState(false)
 
   if (deploymentPattern !== 'factory') {
     return null
@@ -153,18 +155,37 @@ export function ManufacturerProxyPanel({ onDeployProxy }: ManufacturerProxyPanel
           </div>
 
           {/* Actions */}
-          <div className="space-y-2 pt-2">
+          <div className="flex gap-2 pt-2">
+            <Button
+              onClick={() => setShowExportDialog(true)}
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              disabled={Number(orderCount) === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
             <Button
               onClick={handleViewMyOrders}
               variant="default"
               size="sm"
-              className="w-full"
+              className="flex-1"
             >
               View My Orders
             </Button>
           </div>
         </div>
       </CardContent>
+
+      {/* Export Dialog */}
+      {showExportDialog && proxyAddress && (
+        <ExportFiltersDialog
+          proxyAddress={proxyAddress}
+          orderCount={Number(orderCount)}
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
     </Card>
   )
 }

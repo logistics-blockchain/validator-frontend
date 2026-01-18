@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { publicClient } from '@/lib/viem'
-import { useBlockchainStore } from '@/store/blockchainStore'
+import { indexerService } from '@/services/indexerService'
 import type { TransactionLog } from '@/types/explorer'
 import type { Address, Hash } from 'viem'
 
@@ -15,7 +14,7 @@ export interface EventWithContext extends TransactionLog {
 
 /**
  * Hook to fetch events emitted by a specific contract address
- * Uses eth_getLogs for efficient event retrieval
+ * Uses the blockchain indexer API for efficient querying
  */
 export function useAddressEvents(address: Address | null) {
   const [events, setEvents] = useState<EventWithContext[]>([])
@@ -32,64 +31,38 @@ export function useAddressEvents(address: Address | null) {
       try {
         console.log('[AddressEvents] Fetching events for', address)
 
-        // Get current block number
-        const latestBlockNumber = await publicClient.getBlockNumber()
+        const indexedEvents = await indexerService.getAddressEvents(address, 100, 0)
 
-        // Besu has a max range limit for eth_getLogs (typically 1000 blocks)
-        // We need to batch the queries
-        const BATCH_SIZE = 1000n
-        const allLogs: any[] = []
+        // Get unique block numbers to fetch timestamps
+        const uniqueBlockNumbers = [...new Set(indexedEvents.map((e) => e.blockNumber))]
+        const blockTimestamps = new Map<number, number>()
 
-        for (let fromBlock = 0n; fromBlock <= latestBlockNumber; fromBlock += BATCH_SIZE) {
-          const toBlock = fromBlock + BATCH_SIZE - 1n > latestBlockNumber
-            ? latestBlockNumber
-            : fromBlock + BATCH_SIZE - 1n
-
-          console.log(`[AddressEvents] Fetching logs from block ${fromBlock} to ${toBlock}`)
-
+        // Fetch block timestamps sequentially to avoid rate limiting
+        for (const blockNum of uniqueBlockNumbers.slice(0, 50)) {
           try {
-            const logs = await publicClient.getLogs({
-              address: address,
-              fromBlock,
-              toBlock,
-            })
-            allLogs.push(...logs)
-          } catch (error) {
-            console.error(`[AddressEvents] Error fetching logs for range ${fromBlock}-${toBlock}:`, error)
-            // Continue with next batch even if one fails
+            const block = await indexerService.getBlock(blockNum)
+            if (block) blockTimestamps.set(blockNum, block.timestamp)
+          } catch {
+            // Ignore errors for individual block fetches
           }
         }
 
-        console.log(`[AddressEvents] Found ${allLogs.length} total events from eth_getLogs`)
+        const allEvents: EventWithContext[] = indexedEvents.map((event) => {
+          const timestamp = blockTimestamps.get(event.blockNumber)
+          return {
+            address: event.address,
+            topics: [event.topic0, event.topic1, event.topic2, event.topic3].filter(
+              (t): t is Hash => t !== null
+            ),
+            data: event.data,
+            logIndex: event.logIndex,
+            transactionHash: event.txHash,
+            blockNumber: BigInt(event.blockNumber),
+            timestamp: timestamp ? BigInt(timestamp) : undefined,
+          }
+        })
 
-        // Get block timestamps for each event
-        const blockNumbers = new Set(allLogs.map((log) => log.blockNumber))
-        const blockPromises = Array.from(blockNumbers).map((blockNum) =>
-          blockNum ? publicClient.getBlock({ blockNumber: blockNum }) : Promise.resolve(null)
-        )
-
-        const blocks = await Promise.all(blockPromises)
-        const blockMap = new Map(
-          blocks
-            .filter((b): b is NonNullable<typeof b> => b !== null)
-            .map((b) => [b.number, b.timestamp])
-        )
-
-        // Map logs to events with context
-        const allEvents: EventWithContext[] = allLogs.map((log) => ({
-          address: log.address,
-          topics: log.topics,
-          data: log.data,
-          logIndex: log.logIndex!,
-          transactionHash: log.transactionHash!,
-          blockNumber: log.blockNumber!,
-          timestamp: blockMap.get(log.blockNumber!),
-        }))
-
-        // Sort by block number descending
-        allEvents.sort((a, b) => Number(b.blockNumber - a.blockNumber))
-
-        console.log(`[AddressEvents] Loaded ${allEvents.length} events`)
+        console.log(`[AddressEvents] Loaded ${allEvents.length} events from indexer`)
         setEvents(allEvents)
       } catch (error) {
         console.error('[AddressEvents] Error loading events:', error)

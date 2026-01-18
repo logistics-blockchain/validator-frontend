@@ -1,29 +1,13 @@
 {
   "networks": [
     {
-      "id": "besu-local",
-      "name": "Besu Local",
-      "chainId": 10001,
-      "rpcUrl": "http://127.0.0.1:8545",
-      "description": "Local Besu development node",
-      "enabled": true
-    },
-    {
       "id": "besu-cloud",
       "name": "Besu Cloud",
-      "chainId": 10001,
+      "chainId": 10002,
       "rpcUrl": "/api/rpc",
       "description": "Cloud-hosted Besu network",
       "enabled": true
-    },
-    {
-      "id": "hardhat-local",
-      "name": "Hardhat Local",
-      "chainId": 31337,
-      "rpcUrl": "http://127.0.0.1:8545",
-      "description": "Local Hardhat development node",
-      "enabled": true
     }
   ],
-  "defaultNetwork": "besu-local"
+  "defaultNetwork": "besu-cloud"
 }

@@ -1,12 +1,13 @@
 import React, { useState } from 'react'
 import { useContractStore } from '@/store/contractStore'
 import { FunctionForm } from './FunctionForm'
+import { ExportFiltersDialog } from './ExportFiltersDialog'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card'
 import { Badge } from './ui/Badge'
 import { Button } from './ui/Button'
 import { AddressLink } from './AddressLink'
 import { formatAddress } from '@/lib/utils'
-import { Copy, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react'
+import { Copy, RefreshCw, ChevronDown, ChevronRight, Download } from 'lucide-react'
 import type { ContractFunction, Order } from '@/types/contracts'
 import type { Address } from 'viem'
 
@@ -25,12 +26,14 @@ export function ContractDashboard() {
     fetchNftsForContract,
     deploymentPattern,
     selectedManufacturerProxy,
+    manufacturerProxies,
   } = useContractStore()
   const [selectedTab, setSelectedTab] = useState<Record<string, 'read' | 'write'>>({})
   const [openFunctions, setOpenFunctions] = useState<Record<string, boolean>>({})
   const [openNfts, setOpenNfts] = useState<Record<string, boolean>>({})
   const [selectedNftContract, setSelectedNftContract] = useState<Address | '' >('')
   const [selectedContractAddress, setSelectedContractAddress] = useState<Address | ''>('')
+  const [showExportDialog, setShowExportDialog] = useState(false)
 
   // Auto-select manufacturer proxy in factory mode (must be at top, before any returns)
   const isFactoryMode = deploymentPattern === 'factory'
@@ -164,18 +167,28 @@ export function ContractDashboard() {
             </div>
           )}
 
-          {/* Factory Mode: Show fetch button */}
+          {/* Factory Mode: Show fetch and export buttons */}
           {isFactoryMode && (
             <div className="mb-4">
               {selectedManufacturerProxy ? (
-                <Button
-                  onClick={handleFetchNfts}
-                  disabled={isNftLoading}
-                  className="w-full"
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isNftLoading ? 'animate-spin' : ''}`} />
-                  {isNftLoading ? 'Fetching...' : 'Fetch Orders'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={handleFetchNfts}
+                    disabled={isNftLoading}
+                    className="flex-1"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isNftLoading ? 'animate-spin' : ''}`} />
+                    {isNftLoading ? 'Fetching...' : 'Fetch Orders'}
+                  </Button>
+                  <Button
+                    onClick={() => setShowExportDialog(true)}
+                    variant="outline"
+                    disabled={!currentNfts || currentNfts.length === 0}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
+                  </Button>
+                </div>
               ) : (
                 <div className="text-center py-4 text-gray-500 text-sm">
                   Click "View" on a manufacturer proxy above to see their orders
@@ -379,6 +392,15 @@ export function ContractDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Export Dialog */}
+      {showExportDialog && viewableContract && (
+        <ExportFiltersDialog
+          proxyAddress={viewableContract}
+          orderCount={currentNfts?.length || 0}
+          onClose={() => setShowExportDialog(false)}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { publicClient } from '@/lib/viem'
+import { indexerService } from '@/services/indexerService'
 import { parseAbi } from 'viem'
 import type { Address } from 'viem'
 
@@ -12,18 +13,18 @@ export interface ValidatorMetrics {
   lastBlockNumber: bigint
   lastBlockTime: bigint
   isActive: boolean
-  uptime: number // percentage
+  uptime: number
 }
 
 export interface ValidatorStats {
   validators: ValidatorMetrics[]
   totalBlocks: number
   averageBlockTime: number
-  blockTimeVariance: number // Standard deviation of block times
+  blockTimeVariance: number
   currentBlockNumber: bigint
 }
 
-export function useValidatorMetrics(blockCount: number = 100) {
+export function useValidatorMetrics(blockCount: number = 1000) {
   const [stats, setStats] = useState<ValidatorStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -31,146 +32,123 @@ export function useValidatorMetrics(blockCount: number = 100) {
     let isInitialLoad = true
 
     const fetchValidatorMetrics = async () => {
-      // Only show loading on initial load, not on refreshes
       if (isInitialLoad) {
         setLoading(true)
       }
       try {
-        const latestBlock = await publicClient.getBlockNumber()
-        const startBlock = latestBlock - BigInt(blockCount) + 1n
+        // Fetch chain stats for current block number
+        const chainStats = await indexerService.getStats()
 
-        // Fetch recent blocks
-        const blockPromises = []
-        for (let i = startBlock; i <= latestBlock; i++) {
-          blockPromises.push(publicClient.getBlock({ blockNumber: i }))
+        // Fetch recent blocks from indexer - use blockCount parameter (up to 1000)
+        // Fetch in two batches of 500 to get 1000 blocks
+        const targetBlocks = Math.min(blockCount, 1000)
+        const batchSize = 500
+        let allBlocks: Awaited<ReturnType<typeof indexerService.getBlocks>>['blocks'] = []
+
+        for (let offset = 0; offset < targetBlocks; offset += batchSize) {
+          const limit = Math.min(batchSize, targetBlocks - offset)
+          try {
+            const { blocks: batch } = await indexerService.getBlocks(limit, offset)
+            allBlocks = allBlocks.concat(batch)
+            if (batch.length < limit) break // No more blocks available
+          } catch (err) {
+            console.warn(`Failed to fetch blocks at offset ${offset}:`, err)
+            break
+          }
         }
 
-        const blocks = await Promise.all(blockPromises)
+        const blocks = allBlocks
 
-        // Aggregate validator metrics
-        const validatorMap = new Map<Address, {
-          blocksProduced: number
-          lastBlockNumber: bigint
-          lastBlockTime: bigint
-          blockNumbers: bigint[]
-        }>()
-
-        // Calculate block times and variance
+        // Calculate block time stats from recent blocks
         const blockTimes: number[] = []
-        let totalBlockTime = 0n
+        let totalBlockTime = 0
 
-        for (let i = 0; i < blocks.length; i++) {
-          const block = blocks[i]
-          const validator = block.miner
-
-          if (!validatorMap.has(validator)) {
-            validatorMap.set(validator, {
-              blocksProduced: 0,
-              lastBlockNumber: 0n,
-              lastBlockTime: 0n,
-              blockNumbers: [],
-            })
-          }
-
-          const vData = validatorMap.get(validator)!
-          vData.blocksProduced++
-          vData.blockNumbers.push(block.number)
-
-          if (block.number > vData.lastBlockNumber) {
-            vData.lastBlockNumber = block.number
-            vData.lastBlockTime = block.timestamp
-          }
-
-          // Calculate block time differences
-          if (i > 0) {
-            const blockTime = Number(block.timestamp - blocks[i - 1].timestamp)
-            blockTimes.push(blockTime)
-            totalBlockTime += block.timestamp - blocks[i - 1].timestamp
-          }
+        for (let i = 1; i < blocks.length; i++) {
+          const blockTime = blocks[i - 1].timestamp - blocks[i].timestamp
+          blockTimes.push(blockTime)
+          totalBlockTime += blockTime
         }
 
-        const averageBlockTime = blocks.length > 1
-          ? Number(totalBlockTime) / (blocks.length - 1)
-          : 0
+        const averageBlockTime = blockTimes.length > 0 ? totalBlockTime / blockTimes.length : 0
 
-        // Calculate variance (standard deviation) of block times
         let blockTimeVariance = 0
         if (blockTimes.length > 1) {
-          const squaredDiffs = blockTimes.map(time => Math.pow(time - averageBlockTime, 2))
+          const squaredDiffs = blockTimes.map((time) => Math.pow(time - averageBlockTime, 2))
           const variance = squaredDiffs.reduce((sum, val) => sum + val, 0) / blockTimes.length
           blockTimeVariance = Math.sqrt(variance)
         }
 
-        // Fetch all validators from the contract
+        // Fetch all validators from the contract for live status
         let contractValidators: Address[] = []
         try {
-          contractValidators = await publicClient.readContract({
+          contractValidators = (await publicClient.readContract({
             address: VALIDATOR_CONTRACT,
             abi: VALIDATOR_ABI,
             functionName: 'getValidators',
-          }) as Address[]
+          })) as Address[]
         } catch (error) {
-          console.warn('Failed to fetch validators from contract, using block data only:', error)
+          console.warn('Failed to fetch validators from contract:', error)
         }
 
-        // Calculate uptime and active status
         const now = Math.floor(Date.now() / 1000)
 
-        // Normalize validatorMap to lowercase keys for case-insensitive lookup
-        const normalizedValidatorMap = new Map<string, typeof validatorMap extends Map<any, infer V> ? V : never>()
-        validatorMap.forEach((value, key) => {
-          normalizedValidatorMap.set(key.toLowerCase(), value)
-        })
+        // Count blocks per miner from the fetched blocks (not all-time stats)
+        const minerBlockCounts = new Map<string, number>()
+        const latestBlocksByMiner = new Map<string, { number: number; timestamp: number }>()
 
-        // Create a set of all validator addresses (normalized to lowercase to avoid duplicates)
-        const allValidatorAddressesLower = new Set<string>([
-          ...contractValidators.map(addr => addr.toLowerCase()),
-          ...Array.from(normalizedValidatorMap.keys())
-        ])
+        for (const block of blocks) {
+          const miner = block.miner.toLowerCase()
+          // Skip zero address
+          if (miner === '0x0000000000000000000000000000000000000000') continue
 
-        const validators: ValidatorMetrics[] = Array.from(allValidatorAddressesLower).map((addressLower) => {
-          const data = normalizedValidatorMap.get(addressLower)
+          minerBlockCounts.set(miner, (minerBlockCounts.get(miner) || 0) + 1)
 
-          if (!data) {
-            // Validator exists in contract but hasn't produced any blocks
-            return {
-              address: addressLower as Address,
-              blocksProduced: 0,
-              lastBlockNumber: 0n,
-              lastBlockTime: 0n,
-              isActive: false,
-              uptime: 0,
-            }
+          if (!latestBlocksByMiner.has(miner)) {
+            latestBlocksByMiner.set(miner, { number: block.number, timestamp: block.timestamp })
           }
+        }
 
-          const timeSinceLastBlock = now - Number(data.lastBlockTime)
-          const isActive = timeSinceLastBlock < 60 // Active if produced block in last minute
+        // Only use contract validators (active validators), filter out zero address
+        const allValidatorAddresses = new Set<string>(
+          contractValidators
+            .map((addr) => addr.toLowerCase())
+            .filter((addr) => addr !== '0x0000000000000000000000000000000000000000')
+        )
 
-          // Uptime calculation: blocks produced / expected blocks
-          // Expected blocks = total blocks / number of active validators
-          const activeValidatorCount = contractValidators.length || 4 // Fallback to 4 if contract query fails
-          const expectedBlocks = blockCount / activeValidatorCount
-          const uptime = Math.min(100, (data.blocksProduced / expectedBlocks) * 100)
+        const analyzedBlockCount = blocks.length
+        const activeValidatorCount = allValidatorAddresses.size || 4
+        const expectedBlocksPerValidator = analyzedBlockCount / activeValidatorCount
+
+        const validators: ValidatorMetrics[] = Array.from(allValidatorAddresses).map((addressLower) => {
+          const blocksProduced = minerBlockCounts.get(addressLower) || 0
+          const latestBlock = latestBlocksByMiner.get(addressLower)
+
+          const lastBlockTime = latestBlock?.timestamp || 0
+          const timeSinceLastBlock = now - lastBlockTime
+          const isActive = timeSinceLastBlock < 60
+
+          const uptime = expectedBlocksPerValidator > 0
+            ? Math.min(100, (blocksProduced / expectedBlocksPerValidator) * 100)
+            : 0
 
           return {
             address: addressLower as Address,
-            blocksProduced: data.blocksProduced,
-            lastBlockNumber: data.lastBlockNumber,
-            lastBlockTime: data.lastBlockTime,
+            blocksProduced,
+            lastBlockNumber: BigInt(latestBlock?.number || 0),
+            lastBlockTime: BigInt(lastBlockTime),
             isActive,
             uptime,
           }
         })
 
-        // Sort alphabetically by address
-        validators.sort((a, b) => a.address.toLowerCase().localeCompare(b.address.toLowerCase()))
+        validators.sort((a, b) => b.blocksProduced - a.blocksProduced)
 
         setStats({
           validators,
-          totalBlocks: blocks.length,
+          totalBlocks: analyzedBlockCount,
           averageBlockTime,
           blockTimeVariance,
-          currentBlockNumber: latestBlock,
+          currentBlockNumber: BigInt(chainStats.lastIndexedBlock),
         })
       } catch (error) {
         console.error('Error fetching validator metrics:', error)
@@ -185,7 +163,6 @@ export function useValidatorMetrics(blockCount: number = 100) {
 
     fetchValidatorMetrics()
 
-    // Refresh every 2 seconds (every block) without showing loading state
     const interval = setInterval(fetchValidatorMetrics, 2000)
 
     return () => clearInterval(interval)

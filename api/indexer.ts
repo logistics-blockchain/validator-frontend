@@ -10,7 +10,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ? pathFromQuery.join('/')
     : (pathFromQuery || '');
 
-  const indexerTarget = process.env.INDEXER_PROXY_TARGET || 'http://130.61.22.253:3001';
+  const indexerTarget = process.env.INDEXER_PROXY_TARGET || 'http://130.61.22.253:8545';
 
   // Build query string excluding the 'path' param we use for routing
   const queryParams = new URLSearchParams();

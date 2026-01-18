@@ -1,10 +1,5 @@
-import React from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/Card'
-import { Badge } from './ui/Badge'
-import { formatAddress } from '@/lib/utils'
-import { Shield, CheckCircle2 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import type { ValidatorStats } from '@/hooks/useValidatorMetrics'
-import type { Address } from 'viem'
 
 interface ConsensusMonitorProps {
   stats: ValidatorStats | null
@@ -50,7 +45,7 @@ export function ConsensusMonitor({ stats, loading, onViewBlock }: ConsensusMonit
         {/* Total Blocks */}
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-500">Blocks Analyzed</span>
-          <span className="font-medium">100</span>
+          <span className="font-medium">{stats.totalBlocks}</span>
         </div>
       </CardContent>
     </Card>

@@ -4,7 +4,7 @@ import { Button } from './ui/Button'
 import { Badge } from './ui/Badge'
 import { AddressLink } from './AddressLink'
 import { publicClient, createWalletClientForAccount, getActiveAccounts } from '@/lib/viem'
-import { parseAbi, type Address, type Abi } from 'viem'
+import { type Address, type Abi } from 'viem'
 import { formatAddress } from '@/lib/utils'
 
 const VALIDATOR_CONTRACT = '0x0000000000000000000000000000000000009999' as Address
@@ -485,6 +485,46 @@ export function ValidatorManagement() {
     }
   }
 
+  const handleSignValidatorProposal = async (proposalId: number, candidateAddress: Address) => {
+    if (!contractAbi) return
+
+    setLoading(true)
+    setTxStatus({ type: 'sign_proposal', status: 'pending', target: candidateAddress })
+
+    try {
+      const walletClient = createWalletClientForAccount(selectedAccount)
+      const hash = await walletClient.writeContract({
+        address: VALIDATOR_CONTRACT,
+        abi: contractAbi,
+        functionName: 'signValidatorProposal',
+        args: [BigInt(proposalId)],
+      })
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash })
+
+      setTxStatus({
+        type: 'sign_proposal',
+        status: 'success',
+        hash,
+        blockNumber: receipt.blockNumber.toString(),
+        gasUsed: receipt.gasUsed.toString(),
+        target: candidateAddress
+      })
+
+      loadContractState()
+    } catch (error: any) {
+      console.error('Error signing validator proposal:', error)
+      setTxStatus({
+        type: 'sign_proposal',
+        status: 'error',
+        error: error.message || 'Failed to sign validator proposal',
+        target: candidateAddress
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <Card className="bg-white shadow-md">
       <CardHeader className="border-b">
@@ -519,9 +559,9 @@ export function ValidatorManagement() {
 
           <div className="text-gray-500">Quorum:</div>
           <div className="font-medium">
-            {adminCount > 1
+            {adminCount !== null && adminCount > 1
               ? `${Math.floor(adminCount / 2) + 1}/${adminCount} admin signatures required`
-              : 'Single admin (instant approval)'}
+              : adminCount === 1 ? 'Single admin (instant approval)' : 'Loading...'}
           </div>
         </div>
 
@@ -842,7 +882,10 @@ export function ValidatorManagement() {
                 ) : (
                   pendingValidatorProposals.map((proposal) => {
                     const threshold = Math.floor(currentAdmins.length / 2) + 1
-                    const hasSignedProposal = proposal.signatures.includes(getActiveAccounts()[selectedAccount]?.address as Address)
+                    const walletClient = createWalletClientForAccount(selectedAccount)
+                    const hasSignedProposal = proposal.signatures.some(
+                      sig => sig.toLowerCase() === walletClient.account.address.toLowerCase()
+                    )
                     const createdDate = new Date(Number(proposal.createdAt) * 1000)
 
                     return (
@@ -851,6 +894,7 @@ export function ValidatorManagement() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-xs font-semibold text-gray-600">Proposal #{proposal.id}</span>
+                              <Badge variant="warning">Pending</Badge>
                               <Badge variant={proposal.isApproval ? 'default' : 'destructive'}>
                                 {proposal.isApproval ? 'Approve' : 'Remove'}
                               </Badge>
@@ -859,7 +903,12 @@ export function ValidatorManagement() {
                               <AddressLink address={proposal.candidate} />
                             </div>
                             <div className="text-xs text-gray-600">
-                              <div>Signatures: {proposal.signatureCount}/{threshold}</div>
+                              <div>Signatures: {proposal.signatureCount}/{threshold} required</div>
+                              <div className="mt-1">
+                                Signed by: {proposal.signatures.length > 0
+                                  ? proposal.signatures.map(s => s.slice(0, 8) + '...').join(', ')
+                                  : 'None'}
+                              </div>
                               {proposal.reason && (
                                 <div className="mt-1">Reason: {proposal.reason}</div>
                               )}
@@ -868,6 +917,19 @@ export function ValidatorManagement() {
                               </div>
                             </div>
                           </div>
+                          {isAdmin && !hasSignedProposal && (
+                            <Button
+                              onClick={() => handleSignValidatorProposal(proposal.id, proposal.candidate)}
+                              disabled={loading}
+                              size="sm"
+                              variant="default"
+                            >
+                              Sign
+                            </Button>
+                          )}
+                          {isAdmin && hasSignedProposal && (
+                            <Badge variant="success">Signed</Badge>
+                          )}
                         </div>
                       </div>
                     )

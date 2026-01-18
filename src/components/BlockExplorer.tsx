@@ -18,11 +18,6 @@ export function BlockExplorer({ onViewBlock, onViewTransaction, onViewAddress }:
   const [searchError, setSearchError] = useState<string | null>(null)
   const { blocks, loading, refresh } = useBlockHistory(blockCount)
 
-  const formatTimestamp = (timestamp: bigint) => {
-    const date = new Date(Number(timestamp) * 1000)
-    return date.toLocaleString()
-  }
-
   const formatTimeAgo = (timestamp: bigint) => {
     const now = Math.floor(Date.now() / 1000)
     const diff = now - Number(timestamp)

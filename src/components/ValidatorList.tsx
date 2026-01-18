@@ -1,4 +1,3 @@
-import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from './ui/Card'
 import { formatAddress } from '@/lib/utils'
 import { Activity } from 'lucide-react'
@@ -11,7 +10,7 @@ interface ValidatorListProps {
   onViewAddress?: (address: Address) => void
 }
 
-export function ValidatorList({ validators, loading, onViewAddress }: ValidatorListProps) {
+export function ValidatorList({ validators, loading, onViewAddress: _onViewAddress }: ValidatorListProps) {
   const formatTimeAgo = (timestamp: bigint) => {
     if (timestamp === 0n) return '-'
 
